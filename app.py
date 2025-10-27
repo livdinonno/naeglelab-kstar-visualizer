@@ -11,22 +11,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        :root {
-            color-scheme: light;
-        }
-        body {
-            background-color: white !important;
-            color: black !important;
-        }
-        [data-testid="stAppViewContainer"] {
-            background-color: white !important;
-        }
-        [data-testid="stHeader"] {
-            background: white !important;
-        }
-        [data-testid="stSidebar"] {
-            background-color: #f9f9f9 !important;
-        }
+    .stApp {
+        background-color: #FFFFFF; /* White color */
+    }
     </style>
     """,
     unsafe_allow_html=True
