@@ -1,12 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-try:
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-except Exception:
-    pass
-
 st.set_page_config(page_title="KSTAR Visualizer", layout="wide", initial_sidebar_state="expanded")
 
 def home_page():
@@ -15,3 +9,4 @@ def home_page():
 
 if __name__ == "__main__":
     home_page()
+
