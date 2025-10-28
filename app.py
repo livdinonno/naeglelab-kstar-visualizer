@@ -20,8 +20,8 @@ st.markdown(
 )
 
 def home_page():
-    st.title("Publication on Phosphotyrosine Profiling")
-    st.markdown("Welcome to the KSTAR Visualizer. This site allows you to visualize your data after processing it through the KSTAR algorithm. It also links relevant publications and tutorials.")
+    st.title("Welcome to the KSTAR Visualizer")
+    st.markdown("This site allows you to visualize your data after processing it through the KSTAR algorithm. It also links relevant publications and tutorials.")
 
 if __name__ == "__main__":
     home_page()
