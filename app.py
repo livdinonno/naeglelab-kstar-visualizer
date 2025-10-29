@@ -7,7 +7,7 @@ TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-
 st.set_page_config(
     page_title="KSTAR Visualizer",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # sidebar starts closed
 )
 
 # background color
@@ -32,6 +32,18 @@ def home_page():
     st.caption("Click the button above to view the step-by-step tutorial on GitHub.")
     st.divider()
 
+    # main-page expander for related publications
+    with st.expander("Related Publications", expanded=False):
+        publications = [
+            {
+                "title": "Phosphotyrosine Profiling Reveals New Signaling Networks (PMC Article)",
+                "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/"
+            },
+        ]
+        for pub in publications:
+            st.markdown(f"- [{pub['title']}]({pub['url']})")
+
+    st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     if st.button("Launch Visualizer"):
@@ -40,13 +52,13 @@ def home_page():
 # visualizer page
 def visualizer_page():
     st.title("KSTAR Data Visualizer")
-    st.caption("Upload the two final KSTAR outputs: *_mann_whitney_fpr.tsv and *_mann_whitney_activities.tsv")
+    st.caption("Upload the two final KSTAR outputs: mann_whitney_fpr.tsv and mann_whitney_activities.tsv")
 
     col1, col2 = st.columns(2)
     with col1:
-        fpr_file = st.file_uploader("Upload FPR file (*_mann_whitney_fpr.tsv)", type=["tsv"], key="fpr")
+        fpr_file = st.file_uploader("Upload FPR file (mann_whitney_fpr.tsv)", type=["tsv"], key="fpr")
     with col2:
-        act_file = st.file_uploader("Upload Activities file (*_mann_whitney_activities.tsv)", type=["tsv"], key="act")
+        act_file = st.file_uploader("Upload Activities file (mann_whitney_activities.tsv)", type=["tsv"], key="act")
 
     if fpr_file and act_file:
         try:
@@ -85,7 +97,7 @@ def render_sidebar():
 if __name__ == "__main__":
     render_sidebar()
 
-    # Page switching logic
+    # page switching logic
     if "page" not in st.session_state:
         st.session_state.page = "home"
 
@@ -93,6 +105,7 @@ if __name__ == "__main__":
         home_page()
     elif st.session_state.page == "visualizer":
         visualizer_page()
+
 
 
 
