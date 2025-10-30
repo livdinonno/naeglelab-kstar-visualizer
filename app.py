@@ -82,29 +82,29 @@ def visualizer_page():
         st.session_state.page = "home"
 
 # sidebar
-def render_sidebar():
-    st.sidebar.title("Related Publications")
-    publications = [
-        {
-            "title": "Phosphotyrosine Profiling Reveals New Signaling Networks (PMC Article)",
-            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/"
-        },
-    ]
-    for pub in publications:
-        st.sidebar.markdown(f"- [{pub['title']}]({pub['url']})")
+# def render_sidebar():
+ #   st.sidebar.title("Related Publications")
+  #  publications = [
+   #     {
+    #        "title": "Phosphotyrosine Profiling Reveals New Signaling Networks (PMC Article)",
+     #       "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/"
+      #  },
+   # ]
+   # for pub in publications:
+    #    st.sidebar.markdown(f"- [{pub['title']}]({pub['url']})")
 
 # main router
-if __name__ == "__main__":
-    render_sidebar()
+#if __name__ == "__main__":
+#    render_sidebar()
 
     # page switching logic
-    if "page" not in st.session_state:
-        st.session_state.page = "home"
+  #  if "page" not in st.session_state:
+  #      st.session_state.page = "home"
 
-    if st.session_state.page == "home":
-        home_page()
-    elif st.session_state.page == "visualizer":
-        visualizer_page()
+  #  if st.session_state.page == "home":
+   #     home_page()
+  #  elif st.session_state.page == "visualizer":
+   #     visualizer_page()
 
 
 
