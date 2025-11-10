@@ -27,8 +27,9 @@ def home_page():
         #st.session_state.page = "plotter"
         
     st.divider()
-    st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     st.caption("Click the button above to view the step-by-step tutorial on GitHub.")
+    st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
+
   
     st.divider()
     # related publications on the main page
