@@ -5,14 +5,14 @@ import pandas as pd
 TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world" 
 
 st.set_page_config(
-    page_title="KSTAR Visualizer",
+    page_title="KSTAR Results Plotter",
     layout="wide",
     initial_sidebar_state="collapsed"  # sidebar starts closed
 )
 
 # home page
 def home_page():
-    st.title("Welcome to the KSTAR Visualizer")
+    st.title("Welcome to the KSTAR Results Plotter")
     st.markdown(
         "This site allows you to visualize your data after processing it through the KSTAR algorithm. "
         "It also provides quick access to relevant publications and a setup tutorial."
@@ -20,8 +20,8 @@ def home_page():
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     
-    if st.button("Launch Visualizer"):
-        st.session_state.page = "visualizer"
+    if st.button("Launch Results Plotter"):
+        st.session_state.page = "plotter"
         
     st.divider()
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
@@ -42,7 +42,7 @@ def home_page():
 
 # visualizer page
 def visualizer_page():
-    st.title("KSTAR Data Visualizer")
+    st.title("KSTAR Data Plotter")
     st.caption("Upload the two final KSTAR outputs: mann_whitney_fpr.tsv and mann_whitney_activities.tsv")
 
     col1, col2 = st.columns(2)
@@ -86,7 +86,7 @@ if "page" not in st.session_state:
 
 if st.session_state.page == "home":
     home_page()
-elif st.session_state.page == "visualizer":
+elif st.session_state.page == "plotter":
     visualizer_page()
 
 
