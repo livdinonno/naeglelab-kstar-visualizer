@@ -48,8 +48,15 @@ def home_page():
     )
     
     st.divider()
+     st.markdown(
+        """
+        <div style='background-color:#f5f5f5; padding: 2rem; border-radius: 8px;'>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+        
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
- 
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     # related publications on the main page
     st.caption("See key publications related to KSTAR methodology and applications.")
