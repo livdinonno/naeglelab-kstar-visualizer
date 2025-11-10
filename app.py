@@ -22,18 +22,6 @@ def home_page():
     st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
-        # larger Launch Results Plotter button styling
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stLinkButton"] button:first-child {
-            padding: 1.5rem 1.5rem;
-            font-size: 1.5rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
     st.link_button("Launch Results Plotter", KSTAR_URL)
         #st.session_state.page = "plotter"
 
