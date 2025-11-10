@@ -33,6 +33,7 @@ def home_page():
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     # related publications on the main page
+    st.caption("See key publications related to KSTAR methodology and applications.")
     with st.expander("Related Publications", expanded=False):
         publications = [
             {
