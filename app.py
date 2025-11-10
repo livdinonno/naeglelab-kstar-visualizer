@@ -17,11 +17,17 @@ def home_page():
         "This site allows you to visualize your data after processing it through the KSTAR algorithm. "
         "It also provides quick access to relevant publications and a setup tutorial."
     )
-
+    st.markdown("### Ready to explore your data?")
+    st.markdown("Upload your KSTAR output files to begin visualizing your results.")
+    
+    if st.button("Launch Visualizer"):
+        st.session_state.page = "visualizer"
+        
+    st.divider()
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     st.caption("Click the button above to view the step-by-step tutorial on GitHub.")
+  
     st.divider()
-
     # related publications on the main page
     with st.expander("Related Publications", expanded=False):
         publications = [
@@ -33,12 +39,6 @@ def home_page():
         for pub in publications:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
 
-    st.divider()
-    st.markdown("### Ready to explore your data?")
-    st.markdown("Upload your KSTAR output files to begin visualizing your results.")
-    
-    if st.button("Launch Visualizer"):
-        st.session_state.page = "visualizer"
 
 # visualizer page
 def visualizer_page():
