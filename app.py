@@ -23,7 +23,7 @@ def home_page():
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     
-    if st.button("Launch Results Plotter", KSTAR_URL):
+    st.link_button("Launch Results Plotter", KSTAR_URL):
         #st.session_state.page = "plotter"
         
     st.divider()
