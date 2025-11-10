@@ -24,6 +24,7 @@ def home_page():
         """,
         unsafe_allow_html=True
     )
+    
     st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
