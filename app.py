@@ -16,7 +16,7 @@ st.set_page_config(
 def home_page():
     st.markdown(
         """
-        <div style='text-align: center;'>
+        <div style='background-color:#f5f5f5; padding: 2rem; border-radius: 8px; text-align: center;'>>
             <h1>Welcome to the KSTAR Results Plotter</h1>
             <p>This site allows you to visualize your data after processing it through the KSTAR algorithm.
             It also provides quick access to relevant publications and a setup tutorial.</p>
