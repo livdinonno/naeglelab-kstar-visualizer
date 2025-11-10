@@ -30,7 +30,7 @@ def home_page():
 
     
     st.divider()
-    st.caption("Click the below above to view the step-by-step tutorial on GitHub.")
+    st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     # related publications on the main page
     with st.expander("Related Publications", expanded=False):
