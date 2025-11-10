@@ -31,6 +31,18 @@ def home_page():
     
     st.divider()
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
+    # smaller GitHub button styling
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stLinkButton"] button {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     # related publications on the main page
     st.caption("See key publications related to KSTAR methodology and applications.")
