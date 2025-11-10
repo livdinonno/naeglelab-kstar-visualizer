@@ -37,7 +37,7 @@ def home_page():
             color: #000000;
             font-weight: 600;
             padding: 0.75rem 1.5rem;
-            border-radius: 8px;
+            border-radius: 20px;
             text-decoration: none;
             border: 1px solid #b7e4c7;
         ">
