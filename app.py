@@ -3,14 +3,13 @@ import pandas as pd
 
 # GitHub tutorial link
 TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world" 
-
 # Run KSTAR data link
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 
 st.set_page_config(
     page_title="KSTAR Results Plotter",
     layout="wide",
-    initial_sidebar_state="collapsed"  # sidebar starts closed
+    # initial_sidebar_state="collapsed"  # sidebar starts closed
 )
 
 # home page
@@ -23,7 +22,19 @@ def home_page():
     st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
-    
+        # larger Launch Results Plotter button styling
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stLinkButton"] button:first-child {
+            padding: 0.75rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     st.link_button("Launch Results Plotter", KSTAR_URL)
         #st.session_state.page = "plotter"
 
