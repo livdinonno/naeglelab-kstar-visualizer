@@ -19,7 +19,7 @@ def home_page():
         <div style='background-color:#f5f5f5; padding: 2rem; border-radius: 8px; text-align: center;'>
             <h1>Welcome to the KSTAR Results Plotter</h1>
             <p>This site allows you to visualize your data after processing it through the KSTAR algorithm.
-            It also provides quick access to relevant publications and a setup tutorial.</p>
+            It also provides quick access to a setup tutorial and relevant publications.</p>
         </div>
         """,
         unsafe_allow_html=True
