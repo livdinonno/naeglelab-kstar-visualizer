@@ -68,8 +68,10 @@ def home_page():
         ]
         for pub in publications:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
+     
      #close gray background
      st.markdown("</div>", unsafe_allow_html=True)
+
 # run home page
 home_page()
 
