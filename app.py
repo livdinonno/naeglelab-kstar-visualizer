@@ -14,7 +14,7 @@ st.set_page_config(
 
 # home page
 def home_page():
-     st.markdown(
+    st.markdown(
         """
         <div style='text-align: center;'>
             <h1>Welcome to the KSTAR Results Plotter</h1>
@@ -24,14 +24,11 @@ def home_page():
         """,
         unsafe_allow_html=True
     )
-    
+
     st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     st.link_button("Launch Results Plotter", KSTAR_URL)
-        #st.session_state.page = "plotter"
-
-
     
     st.divider()
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
