@@ -1,2 +1,2 @@
-# naeglelab-kstar-visualizer
-Streamlit App for KSTAR Visualization
+# naeglelab-kstar-results-plotter
+Streamlit App for KSTAR Results Visualization
