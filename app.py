@@ -28,7 +28,24 @@ def home_page():
     st.divider()
     st.markdown("### Ready to explore your data?")
     st.markdown("Upload your KSTAR output files to begin visualizing your results.")
-    st.link_button("Launch Results Plotter", KSTAR_URL)
+    st.markdown(
+        f"""
+        <a href="{KSTAR_URL}" target="_blank"
+        style="
+            display: inline-block;
+            background-color: #d8f3dc;
+            color: #000000;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            border: 1px solid #b7e4c7;
+        ">
+        Launch Results Plotter
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
     
     st.divider()
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
