@@ -27,9 +27,8 @@ def home_page():
         """
         <style>
         div[data-testid="stLinkButton"] button:first-child {
-            padding: 0.75rem 1.5rem;
-            font-size: 1.1rem;
-            font-weight: 600;
+            padding: 1.5rem 1.5rem;
+            font-size: 1.5rem;
         }
         </style>
         """,
