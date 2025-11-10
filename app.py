@@ -14,10 +14,15 @@ st.set_page_config(
 
 # home page
 def home_page():
-    st.title("Welcome to the KSTAR Results Plotter")
-    st.markdown(
-        "This site allows you to visualize your data after processing it through the KSTAR algorithm. "
-        "It also provides quick access to relevant publications and a setup tutorial."
+     st.markdown(
+        """
+        <div style='text-align: center;'>
+            <h1>Welcome to the KSTAR Results Plotter</h1>
+            <p>This site allows you to visualize your data after processing it through the KSTAR algorithm.
+            It also provides quick access to relevant publications and a setup tutorial.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
     st.divider()
     st.markdown("### Ready to explore your data?")
