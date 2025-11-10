@@ -10,16 +10,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"  # sidebar starts closed
 )
 
-# background color
-st.markdown(
-    """
-    <style>
-    .stApp { background-color: #FFFFFF; }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # home page
 def home_page():
     st.title("Welcome to the KSTAR Visualizer")
