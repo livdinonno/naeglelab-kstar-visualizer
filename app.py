@@ -41,6 +41,10 @@ def home_page():
         ]
         for pub in publications:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
+# run home page
+home_page()
+
+
 
 
 # visualizer page
