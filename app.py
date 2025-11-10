@@ -10,7 +10,7 @@ KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 st.set_page_config(
     page_title="KSTAR Results Plotter",
     layout="wide",
-  #  initial_sidebar_state="collapsed"  # sidebar starts closed
+    initial_sidebar_state="collapsed"  # sidebar starts closed
 )
 
 # home page
