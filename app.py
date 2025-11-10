@@ -32,18 +32,7 @@ def home_page():
     
     st.divider()
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
-    # smaller GitHub button styling
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stLinkButton"] button {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.85rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+ 
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
     # related publications on the main page
     st.caption("See key publications related to KSTAR methodology and applications.")
@@ -58,58 +47,6 @@ def home_page():
             st.markdown(f"- [{pub['title']}]({pub['url']})")
 # run home page
 home_page()
-
-
-
-
-# visualizer page
-#def visualizer_page():
- #   st.title("KSTAR Data Plotter")
-  #  st.caption("Upload the two final KSTAR outputs: mann_whitney_fpr.tsv and mann_whitney_activities.tsv")
-
-   # col1, col2 = st.columns(2)
-    #with col1:
-     #   fpr_file = st.file_uploader(
-      #      "Upload FPR file (mann_whitney_fpr.tsv)",
-       #     type=["tsv"],
-        #    key="fpr"
-#        )
- #   with col2:
-  #      act_file = st.file_uploader(
-   #         "Upload Activities file (mann_whitney_activities.tsv)",
-    #        type=["tsv"],
-     #       key="act"
-      #  )
-
-  #  if fpr_file and act_file:
-   #     try:
-    #        fpr_df = pd.read_csv(fpr_file, sep="\t")
-     #       act_df = pd.read_csv(act_file, sep="\t")
-      #      st.success("Files loaded successfully.")
-
-       #     st.subheader("Preview")
-        #    t1, t2 = st.tabs(["FPR (first 20 rows)", "Activities (first 20 rows)"])
-         #   with t1:
-          #      st.dataframe(fpr_df.head(20))
-           # with t2:
-            #    st.dataframe(act_df.head(20))
-    #    except Exception as e:
-     #       st.error(f"Could not read one or both files: {e}")
-    #else:
-     #   st.info("Please upload both .tsv files to begin.")
-
-    #st.divider()
-   # if st.button("Back to Home"):
-    #    st.session_state.page = "home"
-
-# page router
-#if "page" not in st.session_state:
- #   st.session_state.page = "home"
-
-#if st.session_state.page == "home":
- #   home_page()
-#elif st.session_state.page == "plotter":
- #   visualizer_page()
 
 
 
