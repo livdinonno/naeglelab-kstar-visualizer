@@ -25,12 +25,13 @@ def home_page():
     
     st.link_button("Launch Results Plotter", KSTAR_URL)
         #st.session_state.page = "plotter"
-        
+
+
+    
     st.divider()
     st.caption("Click the button above to view the step-by-step tutorial on GitHub.")
     st.link_button("Open GitHub Tutorial", TUTORIAL_URL)
-
-  
+    
     st.divider()
     # related publications on the main page
     with st.expander("Related Publications", expanded=False):
