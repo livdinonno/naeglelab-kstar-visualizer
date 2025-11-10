@@ -51,7 +51,6 @@ def home_page():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 2rem; border-radius: 8px;'>
-        </div>
         """,
         unsafe_allow_html=True
     )
