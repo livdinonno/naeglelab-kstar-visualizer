@@ -46,7 +46,7 @@ def visualizer_page():
     st.caption("Upload the two final KSTAR outputs: mann_whitney_fpr.tsv and mann_whitney_activities.tsv")
 
     col1, col2 = st.columns(2)
-     with col1:
+    with col1:
         fpr_file = st.file_uploader(
             "Upload FPR file (mann_whitney_fpr.tsv)",
             type=["tsv"],
