@@ -48,7 +48,7 @@ def home_page():
     )
     
     st.divider()
-     st.markdown(
+    st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 2rem; border-radius: 8px;'>
         </div>
