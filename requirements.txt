@@ -1,5 +1,12 @@
 numpy>=1.26,<2.0
 pandas>=2.2,<3.0
-#matplotlib==3.8.4
-#seaborn==0.13.2
 streamlit>=1.39,<2.0
+
+# Optional visualization libs
+matplotlib==3.8.4
+seaborn==0.13.2
+
+# Added for KSTAR Results Plotter
+plotly>=5.22.0,<6.0
+scipy>=1.13.0,<2.0
+statsmodels>=0.14.0,<1.0
