@@ -108,8 +108,7 @@ def download_csv_button(df, label, filename):
 
 # SIDEBAR 
 with st.sidebar:
-    # SAME publications dropdown as before
-    st.subheader("See key publications related to KSTAR methodology and applications.")
+    st.caption("See key publications related to KSTAR methodology and applications.")
     with st.expander("Related Publications", expanded=False):
         publications = [
             {
