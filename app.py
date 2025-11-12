@@ -114,6 +114,8 @@ with st.sidebar:
     st.markdown(f"- [{KSTAR_URL}]({KSTAR_URL})")
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
+
+    st.markdown("---")
     
     st.caption("See key publications related to KSTAR methodology and applications.")
     with st.expander("Related Publications", expanded=False):
@@ -126,7 +128,7 @@ with st.sidebar:
         for pub in publications:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
 
-    st.markdown("---")
+    
 
     
 
