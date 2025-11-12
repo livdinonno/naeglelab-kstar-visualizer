@@ -6,14 +6,12 @@ import plotly.express as px
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-
 TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world"
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 
 st.set_page_config(page_title="KSTAR Results Plotter", layout="wide")
 
 
-# Helpers
 def _std(s): return str(s).strip().lower()
 
 def _melt_wide(df, value_name):
@@ -97,8 +95,7 @@ def download_csv_button(df, label, filename):
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(label, data=csv, file_name=filename, mime="text/csv")
 
-
-# SIDEBAR
+# Sidebar
 with st.sidebar:
     st.subheader("Related Publications")
     with st.expander("Related Publications", expanded=False):
@@ -108,7 +105,6 @@ with st.sidebar:
         ]
         for pub in publications:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
-
     st.markdown("---")
     st.subheader("External Links")
     st.caption("Run KSTAR to generate kinase activity output (external runner).")
@@ -116,26 +112,25 @@ with st.sidebar:
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
 
-
-# MAIN PAGE
+# Main page title
 st.markdown("<h1 style='text-align:center; margin-top:0;'>KSTAR Results Plotter</h1>", unsafe_allow_html=True)
 
+# Main intro (keeps your wording, removes italics)
 with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px;'>
-          <b> KSTAR predicts which kinases are most likely active in your samples by testing
-          phosphosite evidence against kinase–substrate relationships. The output includes an <i>activity score</i> and a
-          <i>false positive rate (FPR)</i> for each kinase sample.<br><br>
-          <b>How to read it:</b> Higher <i>activity score</i> = stronger evidence a kinase is active. Lower <i>FPR</i> = higher confidence
+          KSTAR predicts which kinases are most likely active in your samples by testing
+          phosphosite evidence against kinase–substrate relationships. The output includes an activity score and a
+          false positive rate (FPR) for each kinase sample.<br><br>
+          How to read it: Higher activity score = stronger evidence a kinase is active. Lower FPR = higher confidence
           (values near 0 mean unlikely to be a false hit). Scores are visualized as colors and confidence by dot size (−log10(FPR)).
         </div>
         """,
         unsafe_allow_html=True
     )
 
-
-# Upload section 
+# Uploads
 colA, colB = st.columns(2)
 with colA:
     file_activity = st.file_uploader("KSTAR ACTIVITIES FILE (.tsv)", type=["tsv"], key="file1_main")
@@ -143,10 +138,10 @@ with colB:
     file_fpr = st.file_uploader("KSTAR FPR (FALSE POSITIVE RATE) FILE (.tsv)", type=["tsv"], key="file2_main")
 
 if not file_activity:
-    st.info("Upload the KSTAR Activities file (and optionally the FPR file) to begin.")
+    st.info("Upload the KSTAR Activities file to begin. Add the FPR file to enable confidence sizing and the dot plot.")
     st.stop()
 
-# Read & merge
+# Read and merge
 act_raw = pd.read_csv(file_activity, sep="\t")
 activity = coerce_activity(act_raw)
 merged = activity.copy()
@@ -155,10 +150,13 @@ if file_fpr is not None:
     fpr = coerce_fpr(fpr_raw)
     merged = pd.merge(activity, fpr, on=["Kinase", "Sample"], how="left")
 
-# Data Preview
+# 1) Data preview
 st.divider()
-st.subheader("1) Data Preview & Summary")
-st.caption("Standardized long-format data used in all visualizations. Columns are `Kinase`, `Sample`, `Score` (activity), and optional `FPR`.")
+st.subheader("1) Data Preview and What It Means")
+st.caption(
+    "This table is what the app uses everywhere. Columns: Kinase, Sample, Score (activity), FPR (confidence). "
+    "If FPR is missing in your file, the plots that use confidence will prompt you to add it."
+)
 c1, c2 = st.columns([2, 1])
 with c1:
     st.dataframe(merged.head(50), use_container_width=True)
@@ -168,12 +166,13 @@ with c2:
     st.metric("Total rows", len(merged))
 download_csv_button(merged, "Download cleaned long-format table", "kstar_long_table.csv")
 
-# Activity Heatmap
+# 2A) Heatmap
 st.divider()
 st.subheader("2A) Activity Heatmap")
-st.caption(
-    "Rows are kinases and columns are samples. Colors show the activity z-score per kinase "
-    "(red = higher-than-average activity, blue = lower). This highlights relative shifts within each kinase."
+st.markdown(
+    "- What this shows: kinases on rows, samples on columns. Color is a z-score of the activity within each kinase so you can compare patterns across samples.\n"
+    "- Why it matters: it quickly highlights kinases that shift up or down in certain conditions.\n"
+    "- How to use it: reorder rows by variance or mean, and optionally limit to top-N most variable kinases to focus on strong patterns."
 )
 mat = merged.pivot_table(index="Kinase", columns="Sample", values="Score", aggfunc="mean")
 zmat = (mat - mat.mean(axis=1, skipna=True).values.reshape(-1,1)) / mat.std(axis=1, ddof=1, skipna=True).values.reshape(-1,1)
@@ -184,23 +183,20 @@ elif sort_by == "Row mean":
     zmat = zmat.loc[zmat.mean(axis=1, skipna=True).sort_values(ascending=False).index]
 topn = st.slider("Show top N most variable kinases (0 = all)", 0, max(10, zmat.shape[0]), 0)
 zplot = zmat.loc[zmat.var(axis=1, skipna=True).sort_values(ascending=False).index[:topn]] if (topn > 0 and zmat.shape[0] > topn) else zmat
-fig_hm = px.imshow(zplot, labels=dict(color="Z-score"), aspect="auto",
-                   color_continuous_scale="RdBu", origin="lower")
+fig_hm = px.imshow(zplot, labels=dict(color="Z-score"), aspect="auto", color_continuous_scale="RdBu", origin="lower")
 fig_hm.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=600)
 st.plotly_chart(fig_hm, use_container_width=True)
 
-
-# Activity vs FPR Dot Plot
+# 2B) Dot plot: Activity vs FPR
 st.divider()
 st.subheader("2B) Activity vs FPR Dot Plot")
-st.caption(
-    "Each dot represents a Kinase×Sample pair. "
-    "Color = activity score (stronger color = higher activity); "
-    "Dot size = −log10(FPR) (larger = more confident). "
-    "Filter below to highlight confident predictions (e.g., FPR ≤ 0.05)."
+st.markdown(
+    "- What this shows: each dot is one kinase in one sample. Color is the activity score. Dot size reflects confidence as −log10(FPR); bigger = more confident.\n"
+    "- Why it matters: lets you see, in one view, which kinases look active and how confident that call is.\n"
+    "- How to use it: set a maximum FPR to hide low-confidence hits and optionally limit to the top results by confidence."
 )
 if "FPR" not in merged.columns or merged["FPR"].isna().all():
-    st.info("Upload the FPR file to enable confidence sizing.")
+    st.info("Add an FPR file to enable confidence sizing and this dot plot.")
 else:
     dot = merged.copy()
     dot["FPR"] = pd.to_numeric(dot["FPR"], errors="coerce")
@@ -213,20 +209,22 @@ else:
     filt = dot[dot["FPR"] <= fpr_thr].copy()
     if topn_conf > 0 and len(filt) > topn_conf:
         filt = filt.sort_values("neglog10FPR", ascending=False).head(topn_conf)
-    fig_dot = px.scatter(filt, x="Sample", y="Kinase", color="Score", size="neglog10FPR",
-                         size_max=22, color_continuous_scale="Viridis",
-                         hover_data={"FPR":":.3g","neglog10FPR":":.2f","Score":":.3g","Sample":True,"Kinase":True},
-                         title="Activity (color) vs Confidence (dot size = −log10(FPR))")
+    fig_dot = px.scatter(
+        filt, x="Sample", y="Kinase", color="Score", size="neglog10FPR",
+        size_max=22, color_continuous_scale="Viridis",
+        hover_data={"FPR":":.3g","neglog10FPR":":.2f","Score":":.3g","Sample":True,"Kinase":True},
+        title="Activity (color) vs Confidence (dot size = −log10(FPR))"
+    )
     fig_dot.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=600)
     st.plotly_chart(fig_dot, use_container_width=True)
 
-
-# Kinase Detail
+# 3) Kinase detail
 st.divider()
-st.subheader("3) Kinase Detail")
-st.caption(
-    "Select a kinase to view its activity across samples. Each dot = individual sample; "
-    "box shows variation. Helps confirm trends seen in the heatmap or dot plot."
+st.subheader("3) Kinase Detail (per-sample view)")
+st.markdown(
+    "- What this shows: activity values for a single kinase across all samples.\n"
+    "- Why it matters: confirms whether a kinase is consistently higher or lower in certain conditions.\n"
+    "- How to use it: select a kinase, scan the spread of points and the box summary."
 )
 sel_kinase = st.selectbox("Choose a kinase", sorted(merged["Kinase"].unique()))
 subk = merged[merged["Kinase"] == sel_kinase].copy()
@@ -235,30 +233,32 @@ fig_box.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=450)
 st.plotly_chart(fig_box, use_container_width=True)
 download_csv_button(subk, f"Download {sel_kinase} rows", f"{sel_kinase}_rows.csv")
 
-# Differential Analysis
+# 4) Differential analysis
 st.divider()
 st.subheader("4) Differential Analysis (two groups)")
-st.caption(
-    "Compare two sample groups (e.g., Control vs Treated). "
-    "Welch’s t-test per kinase with Benjamini–Hochberg FDR correction. "
-    "Volcano plot shows effect size vs significance."
+st.markdown(
+    "- What this shows: for each kinase, the difference in mean activity between two groups of samples and how statistically convincing that difference is.\n"
+    "- Why it matters: prioritizes kinases that change the most between conditions.\n"
+    "- How to use it: label samples into two groups below. The volcano plot shows effect size (x) versus significance (y = −log10 FDR)."
 )
 samples = sorted(merged["Sample"].unique())
 default_groups = ensure_groups_from_metadata(samples)
 editable = pd.DataFrame({"Sample": samples, "Group": [default_groups[s] for s in samples]})
-st.markdown("Edit group labels below (must have exactly two unique group names).")
+st.markdown("Edit group labels below. There must be exactly two unique group names.")
 group_df = st.data_editor(editable, use_container_width=True, hide_index=True)
 group_map = dict(zip(group_df["Sample"], group_df["Group"]))
 try:
     diff = compute_group_stats(merged[["Kinase","Sample","Score"]], group_map)
     plot_df = diff.copy()
     plot_df["neglog10FDR"] = -np.log10(plot_df["FDR"].astype(float))
-    fig_volc = px.scatter(plot_df, x="Diff_B_minus_A", y="neglog10FDR",
-                          hover_data=["Kinase","MeanA","MeanB","PValue","FDR","N_A","N_B"],
-                          title="Volcano: difference (B − A) vs −log10(FDR)")
+    fig_volc = px.scatter(
+        plot_df, x="Diff_B_minus_A", y="neglog10FDR",
+        hover_data=["Kinase","MeanA","MeanB","PValue","FDR","N_A","N_B"],
+        title="Volcano: difference (B − A) vs −log10(FDR)"
+    )
     fig_volc.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=500)
     st.plotly_chart(fig_volc, use_container_width=True)
-    st.markdown("**Filter significant kinases**")
+    st.markdown("Filter significant kinases")
     fdr_thr = st.slider("FDR threshold", 0.0, 0.25, 0.05, 0.01)
     absdiff_thr_default = float(np.nanmax(np.abs(plot_df["Diff_B_minus_A"])) if len(plot_df) else 1.0)
     absdiff_thr = st.slider("Absolute difference threshold", 0.0, absdiff_thr_default, 0.0, 0.1)
@@ -269,7 +269,3 @@ try:
         download_csv_button(filt, "Download filtered significant kinases (CSV)", "kstar_diff_significant.csv")
 except Exception as e:
     st.info(f"Set exactly two group labels to run the analysis. Details: {e}")
-
-
-
-    
