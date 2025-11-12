@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 # GitHub tutorial link
 TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world" 
