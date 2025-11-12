@@ -117,7 +117,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    st.subheader("For More Context")
+    st.subheader("Further Context")
     st.caption("See key publications related to KSTAR methodology and applications.")
     with st.expander("Related Publications", expanded=False):
         publications = [
