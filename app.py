@@ -158,7 +158,117 @@ if file_fpr is not None:
 # Data Preview
 st.divider()
 st.subheader("1) Data Preview & Summary")
-st.caption("Standardized long-format data used in all visualizations. Columns are `Kinase`
+st.caption("Standardized long-format data used in all visualizations. Columns are `Kinase`, `Sample`, `Score` (activity), and optional `FPR`.")
+c1, c2 = st.columns([2, 1])
+with c1:
+    st.dataframe(merged.head(50), use_container_width=True)
+with c2:
+    st.metric("Kinases", merged["Kinase"].nunique())
+    st.metric("Samples", merged["Sample"].nunique())
+    st.metric("Total rows", len(merged))
+download_csv_button(merged, "Download cleaned long-format table", "kstar_long_table.csv")
+
+# Activity Heatmap
+st.divider()
+st.subheader("2A) Activity Heatmap")
+st.caption(
+    "Rows are kinases and columns are samples. Colors show the activity z-score per kinase "
+    "(red = higher-than-average activity, blue = lower). This highlights relative shifts within each kinase."
+)
+mat = merged.pivot_table(index="Kinase", columns="Sample", values="Score", aggfunc="mean")
+zmat = (mat - mat.mean(axis=1, skipna=True).values.reshape(-1,1)) / mat.std(axis=1, ddof=1, skipna=True).values.reshape(-1,1)
+sort_by = st.selectbox("Reorder rows by:", ["None", "Row variance", "Row mean"])
+if sort_by == "Row variance":
+    zmat = zmat.loc[zmat.var(axis=1, skipna=True).sort_values(ascending=False).index]
+elif sort_by == "Row mean":
+    zmat = zmat.loc[zmat.mean(axis=1, skipna=True).sort_values(ascending=False).index]
+topn = st.slider("Show top N most variable kinases (0 = all)", 0, max(10, zmat.shape[0]), 0)
+zplot = zmat.loc[zmat.var(axis=1, skipna=True).sort_values(ascending=False).index[:topn]] if (topn > 0 and zmat.shape[0] > topn) else zmat
+fig_hm = px.imshow(zplot, labels=dict(color="Z-score"), aspect="auto",
+                   color_continuous_scale="RdBu", origin="lower")
+fig_hm.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=600)
+st.plotly_chart(fig_hm, use_container_width=True)
+
+
+# Activity vs FPR Dot Plot
+st.divider()
+st.subheader("2B) Activity vs FPR Dot Plot")
+st.caption(
+    "Each dot represents a Kinase×Sample pair. "
+    "Color = activity score (stronger color = higher activity); "
+    "Dot size = −log10(FPR) (larger = more confident). "
+    "Filter below to highlight confident predictions (e.g., FPR ≤ 0.05)."
+)
+if "FPR" not in merged.columns or merged["FPR"].isna().all():
+    st.info("Upload the FPR file to enable confidence sizing.")
+else:
+    dot = merged.copy()
+    dot["FPR"] = pd.to_numeric(dot["FPR"], errors="coerce")
+    dot["neglog10FPR"] = -np.log10(dot["FPR"].clip(lower=1e-300))
+    c1, c2, c3 = st.columns([1,1,2])
+    with c1:
+        fpr_thr = st.number_input("Max FPR", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
+    with c2:
+        topn_conf = st.slider("Top-N by confidence (0 = all)", 0, 2000, 0)
+    filt = dot[dot["FPR"] <= fpr_thr].copy()
+    if topn_conf > 0 and len(filt) > topn_conf:
+        filt = filt.sort_values("neglog10FPR", ascending=False).head(topn_conf)
+    fig_dot = px.scatter(filt, x="Sample", y="Kinase", color="Score", size="neglog10FPR",
+                         size_max=22, color_continuous_scale="Viridis",
+                         hover_data={"FPR":":.3g","neglog10FPR":":.2f","Score":":.3g","Sample":True,"Kinase":True},
+                         title="Activity (color) vs Confidence (dot size = −log10(FPR))")
+    fig_dot.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=600)
+    st.plotly_chart(fig_dot, use_container_width=True)
+
+
+# Kinase Detail
+st.divider()
+st.subheader("3) Kinase Detail")
+st.caption(
+    "Select a kinase to view its activity across samples. Each dot = individual sample; "
+    "box shows variation. Helps confirm trends seen in the heatmap or dot plot."
+)
+sel_kinase = st.selectbox("Choose a kinase", sorted(merged["Kinase"].unique()))
+subk = merged[merged["Kinase"] == sel_kinase].copy()
+fig_box = px.box(subk, x="Sample", y="Score", points="all", title=f"{sel_kinase} activity per sample")
+fig_box.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=450)
+st.plotly_chart(fig_box, use_container_width=True)
+download_csv_button(subk, f"Download {sel_kinase} rows", f"{sel_kinase}_rows.csv")
+
+# Differential Analysis
+st.divider()
+st.subheader("4) Differential Analysis (two groups)")
+st.caption(
+    "Compare two sample groups (e.g., Control vs Treated). "
+    "Welch’s t-test per kinase with Benjamini–Hochberg FDR correction. "
+    "Volcano plot shows effect size vs significance."
+)
+samples = sorted(merged["Sample"].unique())
+default_groups = ensure_groups_from_metadata(samples)
+editable = pd.DataFrame({"Sample": samples, "Group": [default_groups[s] for s in samples]})
+st.markdown("Edit group labels below (must have exactly two unique group names).")
+group_df = st.data_editor(editable, use_container_width=True, hide_index=True)
+group_map = dict(zip(group_df["Sample"], group_df["Group"]))
+try:
+    diff = compute_group_stats(merged[["Kinase","Sample","Score"]], group_map)
+    plot_df = diff.copy()
+    plot_df["neglog10FDR"] = -np.log10(plot_df["FDR"].astype(float))
+    fig_volc = px.scatter(plot_df, x="Diff_B_minus_A", y="neglog10FDR",
+                          hover_data=["Kinase","MeanA","MeanB","PValue","FDR","N_A","N_B"],
+                          title="Volcano: difference (B − A) vs −log10(FDR)")
+    fig_volc.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=500)
+    st.plotly_chart(fig_volc, use_container_width=True)
+    st.markdown("**Filter significant kinases**")
+    fdr_thr = st.slider("FDR threshold", 0.0, 0.25, 0.05, 0.01)
+    absdiff_thr_default = float(np.nanmax(np.abs(plot_df["Diff_B_minus_A"])) if len(plot_df) else 1.0)
+    absdiff_thr = st.slider("Absolute difference threshold", 0.0, absdiff_thr_default, 0.0, 0.1)
+    filt = diff[(diff["FDR"] <= fdr_thr) & (diff["Diff_B_minus_A"].abs() >= absdiff_thr)].sort_values("FDR")
+    st.dataframe(filt, use_container_width=True, height=350)
+    download_csv_button(diff, "Download all differential stats (CSV)", "kstar_diff_stats.csv")
+    if len(filt):
+        download_csv_button(filt, "Download filtered significant kinases (CSV)", "kstar_diff_significant.csv")
+except Exception as e:
+    st.info(f"Set exactly two group labels to run the analysis. Details: {e}")
 
 
 
