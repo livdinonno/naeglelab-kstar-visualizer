@@ -45,7 +45,7 @@ def home_page():
         """,
         unsafe_allow_html=True
     )
-        st.markdown("Upload your KSTAR output files to begin visualizing your results.")
+    st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     
     st.divider()        
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
