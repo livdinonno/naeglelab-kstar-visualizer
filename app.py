@@ -109,7 +109,7 @@ def download_csv_button(df, label, filename):
 # SIDEBAR 
 with st.sidebar:
     # SAME publications dropdown as before
-    st.subheader("Related Publications")
+    st.subheader("See key publications related to KSTAR methodology and applications.")
     with st.expander("Related Publications", expanded=False):
         publications = [
             {
@@ -124,7 +124,7 @@ with st.sidebar:
 
     # External Links with better captions
     st.subheader("External Links")
-    st.caption("Run KSTAR to generate kinase activity output (external runner).")
+    st.caption("Another way to run KSTAR to generate kinase activity output (External Runner).")
     st.markdown(f"- [{KSTAR_URL}]({KSTAR_URL})")
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
