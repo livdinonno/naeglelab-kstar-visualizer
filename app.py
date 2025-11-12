@@ -243,82 +243,125 @@ _download_plot_buttons(fig_hm, "kstar_activity_heatmap")
 st.divider()
 st.subheader("2B) Activity vs FPR Dot Plot")
 st.markdown(
-    "Each dot is one kinase in one sample. The dot is **red** if it meets the FPR threshold and **light gray** if it does not. "
-    "Dot size shows confidence using −log10(FPR): bigger dots are more confident. By default the FPR threshold is 0.05, "
-    "which is commonly used. You can change it if needed. The “Top N by confidence” control limits the view to the N highest-confidence dots."
+    "Each dot is one kinase in one sample. Dots are **red** when the FPR passes the threshold (typical choice is 0.05) "
+    "and **light gray** when it does not. Dot size shows confidence using −log10(FPR), so bigger dots are more confident. "
+    "You can change the threshold and the ordering to match the example figure."
 )
 
 if "FPR" not in merged.columns or merged["FPR"].isna().all():
     st.info("Add an FPR file to enable this dot plot and confidence sizing.")
 else:
+    # Controls
+    c1, c2, c3 = st.columns([1, 1, 2])
+    with c1:
+        fpr_thr = st.number_input("FPR threshold", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
+    with c2:
+        topn_conf = st.slider("Top N by confidence (0 = all)", 0, 5000, 0)
+    with c3:
+        cap_val = st.number_input("Clamp −log10(FPR) at", min_value=1.0, max_value=20.0, value=6.0, step=0.5)
+
+    order_mode = st.radio("Axis order", ["Keep file order", "Alphabetical", "Cluster", "Custom"], horizontal=True)
+
+    # Optional custom order text boxes
+    custom_k_order, custom_s_order = None, None
+    if order_mode == "Custom":
+        t1, t2 = st.columns(2)
+        with t1:
+            custom_k_order = st.text_area("Kinase order (comma separated)", placeholder="EGFR, ERBB2, ERBB3, EPHB2, ...").strip()
+        with t2:
+            custom_s_order = st.text_area("Sample order (comma separated)", placeholder="Sample1, Sample2, ...").strip()
+
+    # Prepare table
     dot = merged.copy()
     dot["FPR"] = pd.to_numeric(dot["FPR"], errors="coerce")
-    dot["neglog10FPR"] = -np.log10(dot["FPR"].clip(lower=1e-300))
-
-    left, mid, right = st.columns([1,1,2])
-    with left:
-        fpr_thr = st.number_input("FPR threshold", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
-    with mid:
-        topn_conf = st.slider("Top N by confidence (0 = all)", 0, 5000, 0)
-
-    # Label significant vs not
+    dot["neglog10FPR_raw"] = -np.log10(dot["FPR"].clip(lower=1e-300))
+    dot["neglog10FPR"] = np.minimum(dot["neglog10FPR_raw"], cap_val)
     dot["Significant"] = np.where(dot["FPR"] <= fpr_thr, "Sig", "Not Sig")
 
-    # Keep only top N by confidence if asked
+    # Limit to top-N by confidence if requested
     working = dot.copy()
     if topn_conf > 0 and len(working) > topn_conf:
         working = working.sort_values("neglog10FPR", ascending=False).head(topn_conf)
 
-    # Map size (visual): keep within a readable range
-    # size = 6 .. 32, proportional to neglog10FPR
-    nl = working["neglog10FPR"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    if nl.max() <= 0:
-        size_vals = np.full_like(nl, 8, dtype=float)
-    else:
-        size_vals = 6 + (nl / nl.max()) * (32 - 6)
+    # Set axis orders
+    # Start with file order (as they appear)
+    file_k_order = list(pd.Index(merged["Kinase"]).drop_duplicates())
+    file_s_order = list(pd.Index(merged["Sample"]).drop_duplicates())
 
-    colors = np.where(working["Significant"] == "Sig", "#d62728", "#d3d3d3")  # red vs light gray
-
-    fig_dot = go.Figure()
-    fig_dot.add_trace(go.Scatter(
-        x=working["Sample"], y=working["Kinase"],
-        mode="markers",
-        marker=dict(size=size_vals, color=colors, line=dict(width=0)),
-        text=[f"Kinase: {k}<br>Sample: {s}<br>Score: {sc:.3g}<br>FPR: {f:.3g}<br>-log10(FPR): {nlf:.2f}"
-              for k,s,sc,f,nlf in zip(working["Kinase"], working["Sample"], working["Score"], working["FPR"], working["neglog10FPR"])],
-        hoverinfo="text",
-        name="",
-        showlegend=False
-    ))
-
-    # Size legend (example sizes)
-    for label, nl_target in [("−log10(FPR) ≈ 1", 1), ("≈ 2", 2), ("≈ 3", 3), ("≈ 4", 4)]:
-        size_ref = 6 + (nl_target / max(nl.max(), 1e-6)) * (32 - 6)
-        fig_dot.add_trace(go.Scatter(
-            x=[None], y=[None], mode="markers",
-            marker=dict(size=max(size_ref, 6), color="#d62728"),
-            legendgroup="size", showlegend=True, name=label
-        ))
-
-    fig_dot.update_layout(
-        title="Red = passes FPR threshold, Gray = above threshold; size = −log10(FPR)",
-        margin=dict(l=0, r=0, t=40, b=0),
-        height=600,
-        legend_title_text="Size guide"
-    )
-
-    # Optional clustering on dot plot axes (order kinases and samples)
-    cluster_dots = st.checkbox("Cluster kinases and samples (dot plot)", value=False)
-    if cluster_dots:
-        # Cluster by activity scores; use pivot
+    if order_mode == "Alphabetical":
+        y_order = sorted(working["Kinase"].unique())
+        x_order = sorted(working["Sample"].unique())
+    elif order_mode == "Cluster":
         pivot = working.pivot_table(index="Kinase", columns="Sample", values="Score", aggfunc="mean").fillna(0)
         if pivot.shape[0] >= 3 and pivot.shape[1] >= 2:
             r_order, c_order = _cluster_order(pivot)
-            fig_dot.update_yaxes(categoryorder="array", categoryarray=r_order)
-            fig_dot.update_xaxes(categoryorder="array", categoryarray=c_order)
+            y_order, x_order = r_order, c_order
+        else:
+            y_order, x_order = file_k_order, file_s_order
+    elif order_mode == "Custom":
+        # Parse custom lists if provided; otherwise keep file order
+        def _parse_list(txt):
+            return [t.strip() for t in txt.split(",") if t.strip()]
+        y_order = _parse_list(custom_k_order) if custom_k_order else file_k_order
+        x_order = _parse_list(custom_s_order) if custom_s_order else file_s_order
+    else:
+        y_order, x_order = file_k_order, file_s_order
+
+    # Map −log10(FPR) to fixed marker sizes for a clear legend: 8, 16, 24, 32
+    nl = working["neglog10FPR"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    bins = [0, 1, 2, 3, np.inf]
+    labels = [8, 16, 24, 32]  # pixel sizes
+    size_idx = np.digitize(nl, bins) - 1
+    size_vals = np.array(labels)[np.clip(size_idx, 0, len(labels)-1)]
+
+    # Colors: red for significant, light gray otherwise
+    color_arr = np.where(working["Significant"] == "Sig", "#d62728", "#d3d3d3")
+
+    # Build figure
+    import plotly.graph_objects as go
+    fig_dot = go.Figure()
+
+    # Main points
+    fig_dot.add_trace(go.Scatter(
+        x=working["Sample"], y=working["Kinase"],
+        mode="markers",
+        marker=dict(size=size_vals, color=color_arr, line=dict(width=0)),
+        text=[f"Kinase: {k}<br>Sample: {s}<br>Score: {sc:.3g}<br>FPR: {f:.3g}<br>-log10(FPR): {nlf:.2f}"
+              for k, s, sc, f, nlf in zip(working["Kinase"], working["Sample"], working["Score"], working["FPR"], working["neglog10FPR"])],
+        hoverinfo="text",
+        showlegend=False
+    ))
+
+    # Color legend (two entries)
+    fig_dot.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+                                 marker=dict(size=16, color="#d62728"),
+                                 legendgroup="color", showlegend=True, name=f"FPR ≤ {fpr_thr:g}"))
+    fig_dot.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+                                 marker=dict(size=16, color="#d3d3d3"),
+                                 legendgroup="color", showlegend=True, name=f"FPR > {fpr_thr:g}"))
+
+    # Size legend (fixed swatches)
+    for s in [8, 16, 24, 32]:
+        fig_dot.add_trace(go.Scatter(
+            x=[None], y=[None], mode="markers",
+            marker=dict(size=s, color="#d62728"),
+            legendgroup="size", showlegend=True, name=f"size {s}"
+        ))
+
+    fig_dot.update_layout(
+        title="Red = passes FPR threshold; Gray = above threshold. Size = −log10(FPR) binned to 8/16/24/32.",
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=620,
+        legend_title_text=""
+    )
+
+    # Apply axis category orders
+    fig_dot.update_yaxes(categoryorder="array", categoryarray=y_order)
+    fig_dot.update_xaxes(categoryorder="array", categoryarray=x_order)
 
     st.plotly_chart(fig_dot, use_container_width=True)
-    _download_plot_buttons(fig_dot, "kstar_activity_fpr_dotplot")
+    _download_plot_buttons(fig_dot, "kstar_activity_fpr_dotplot_matched")
+
 
 # 3) Kinase Detail (per-sample view)
 st.divider()
