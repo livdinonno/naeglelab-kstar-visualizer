@@ -112,7 +112,7 @@ with st.sidebar:
     st.subheader("External Links")
     st.caption("Another way to run KSTAR to generate kinase activity output (External Runner).")
     st.markdown(f"- [{KSTAR_URL}]({KSTAR_URL})")
-    st.caption("Step-by-step tutorial on GitHub.")
+    st.caption("Step-by-step tutorial on how to use GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
 
     st.markdown("---")
