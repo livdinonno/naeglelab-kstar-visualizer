@@ -154,9 +154,9 @@ with st.container():
 # Two TSV uploads on the MAIN page only
 colA, colB = st.columns(2)
 with colA:
-    file1 = st.file_uploader("Primary KSTAR results (.tsv)", type=["tsv"], key="file1_main")
+    file1 = st.file_uploader(" KSTAR ACTIVITIES FILE (.tsv)", type=["tsv"], key="file1_main")
 with colB:
-    file2 = st.file_uploader("Secondary KSTAR results (.tsv) — optional", type=["tsv"], key="file2_main")
+    file2 = st.file_uploader("KSTAR FPR (FALSE POSITIVE RATE) FILE (.tsv) — optional", type=["tsv"], key="file2_main")
 
 if not file1 and not file2:
     st.info("Upload at least one TSV file to begin.")
