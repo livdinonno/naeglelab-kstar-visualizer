@@ -124,11 +124,11 @@ with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px;'>
-          <b>What am I looking at?</b> KSTAR predicts which kinases are most likely active in your samples by testing
+          <b> KSTAR predicts which kinases are most likely active in your samples by testing
           phosphosite evidence against kinase–substrate relationships. The output includes an <i>activity score</i> and a
-          <i>false positive rate (FPR)</i> for each Kinase×Sample.<br><br>
-          <b>How to read it:</b> Higher <i>activity score</i> ⇒ stronger evidence a kinase is active. Lower <i>FPR</i> ⇒ higher confidence
-          (values near 0 mean unlikely to be a false hit). We visualize scores as colors and confidence by dot size (−log10(FPR)).
+          <i>false positive rate (FPR)</i> for each kinase sample.<br><br>
+          <b>How to read it:</b> Higher <i>activity score</i> = stronger evidence a kinase is active. Lower <i>FPR</i> = higher confidence
+          (values near 0 mean unlikely to be a false hit). Scores are visualized as colors and confidence by dot size (−log10(FPR)).
         </div>
         """,
         unsafe_allow_html=True
