@@ -12,17 +12,18 @@ KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 
 st.set_page_config(page_title="KSTAR Results Plotter", layout="wide")
 
-
 def _std_colname(name):
     return str(name).strip().lower()
 
 def coerce_kstar_schema(df: pd.DataFrame):
     """
-    Accepts either long or wide tables and returns standardized long table:
-    columns: Kinase, Sample, Score, optional PValue, FDR
+    Standardize to long format with columns:
+    Kinase, Sample, Score, (optional) PValue, FDR
+    Accepts long or wide inputs.
     """
     lower_cols = {_std_colname(c): c for c in df.columns}
-    # Try long format first
+
+    # Long-format candidates
     for k_col, s_col, v_col in [
         ("kinase", "sample", "score"),
         ("kinase", "sample", "activity"),
@@ -43,7 +44,7 @@ def coerce_kstar_schema(df: pd.DataFrame):
             out["Score"] = pd.to_numeric(out["Score"], errors="coerce")
             return out
 
-    # Otherwise assume wide: first column ~ Kinase, rest samples
+    # Otherwise treat as wide: first column is Kinase, rest are samples
     kinase_like = None
     for c in df.columns:
         if _std_colname(c) in ("kinase", "gene", "protein", "name", "id"):
@@ -51,6 +52,7 @@ def coerce_kstar_schema(df: pd.DataFrame):
             break
     if kinase_like is None:
         kinase_like = df.columns[0]
+
     wide = df.rename(columns={kinase_like: "Kinase"}).copy()
     long_df = wide.melt(id_vars="Kinase", var_name="Sample", value_name="Score")
     long_df["Score"] = pd.to_numeric(long_df["Score"], errors="coerce")
@@ -74,7 +76,7 @@ def compute_group_stats(df_long, group_map):
     if len(groups) != 2:
         raise ValueError("Please define exactly two groups for differential analysis.")
     g1, g2 = groups
-    results = []
+    rows = []
     for kinase, sub in work.groupby("Kinase", dropna=False):
         s1 = sub.loc[sub["Group"] == g1, "Score"].dropna().values
         s2 = sub.loc[sub["Group"] == g2, "Score"].dropna().values
@@ -82,23 +84,18 @@ def compute_group_stats(df_long, group_map):
             t_stat, p = stats.ttest_ind(s1, s2, equal_var=False, nan_policy="omit")
         else:
             t_stat, p = np.nan, np.nan
-        mean1 = np.nanmean(s1) if len(s1) else np.nan
-        mean2 = np.nanmean(s2) if len(s2) else np.nan
-        diff = mean2 - mean1
-        results.append(
-            dict(
-                Kinase=kinase,
-                GroupA=g1, MeanA=mean1, N_A=len(s1),
-                GroupB=g2, MeanB=mean2, N_B=len(s2),
-                Diff_B_minus_A=diff,
-                T=t_stat, PValue=p
-            )
-        )
-    res = pd.DataFrame(results)
+        rows.append(dict(
+            Kinase=kinase,
+            GroupA=g1, MeanA=(np.nanmean(s1) if len(s1) else np.nan), N_A=len(s1),
+            GroupB=g2, MeanB=(np.nanmean(s2) if len(s2) else np.nan), N_B=len(s2),
+            Diff_B_minus_A=((np.nanmean(s2) if len(s2) else np.nan) - (np.nanmean(s1) if len(s1) else np.nan)),
+            T=t_stat, PValue=p
+        ))
+    res = pd.DataFrame(rows)
     if "PValue" in res.columns:
         pvals = res["PValue"].values
         mask = np.isfinite(pvals)
-        fdr = np.full_like(pvals, fill_value=np.nan, dtype=float)
+        fdr = np.full_like(pvals, np.nan, dtype=float)
         if mask.sum() > 0:
             fdr[mask] = multipletests(pvals[mask], method="fdr_bh")[1]
         res["FDR"] = fdr
@@ -111,48 +108,64 @@ def download_csv_button(df, label, filename):
 
 # SIDEBAR 
 with st.sidebar:
-    # Related Publications (top)
+    # SAME publications dropdown as before
     st.subheader("Related Publications")
-    with st.expander("KSTAR methodology & applications", expanded=False):
-        st.markdown("- [Phosphotyrosine Profiling Reveals New Signaling Networks (PMC)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/)")
+    with st.expander("Related Publications", expanded=False):
+        publications = [
+            {
+                "title": "Phosphotyrosine Profiling Reveals New Signaling Networks (PMC Article)",
+                "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/"
+            },
+        ]
+        for pub in publications:
+            st.markdown(f"- [{pub['title']}]({pub['url']})")
 
     st.markdown("---")
 
-    # External links with subcaptions
+    # External Links with better captions
     st.subheader("External Links")
-    st.caption("Run KSTAR on processed phosphoproteomic data.")
+    st.caption("Run KSTAR to generate kinase activity output (external runner).")
     st.markdown(f"- [{KSTAR_URL}]({KSTAR_URL})")
-    st.caption("Quick tutorial to set up your environment and workflow.")
+    st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
 
-    st.markdown("---")
 
-    # Uploader
-    st.header("Upload KSTAR Output")
-    uploaded = st.file_uploader("Upload CSV or TSV", type=["csv", "tsv"])
-    st.caption("Expected long format: Kinase, Sample, Score. Wide format also accepted.")
-
-
-# MAIN: Results Plotter
-st.title("KSTAR Results Plotter")
+# MAIN: Results Plotter 
+st.markdown(
+    "<h1 style='text-align:center; margin-top:0;'>KSTAR Results Plotter</h1>",
+    unsafe_allow_html=True
+)
 
 with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px;'>
-          Upload your KSTAR output in the sidebar to view heatmaps, drill into kinases, and run a simple two-group analysis.
+          Upload your KSTAR output files below (TSV). The app will standardize columns and enable heatmaps,
+          per-kinase drilldowns, and a simple two-group differential analysis.
         </div>
         """,
         unsafe_allow_html=True
     )
 
-if uploaded is None:
-    st.info("Upload a CSV/TSV in the left sidebar to begin.")
+# Two TSV uploads on the MAIN page only
+colA, colB = st.columns(2)
+with colA:
+    file1 = st.file_uploader("Primary KSTAR results (.tsv)", type=["tsv"], key="file1_main")
+with colB:
+    file2 = st.file_uploader("Secondary KSTAR results (.tsv) — optional", type=["tsv"], key="file2_main")
+
+if not file1 and not file2:
+    st.info("Upload at least one TSV file to begin.")
 else:
-    # Read & standardize
-    sep = "\t" if Path(uploaded.name).lower().endswith(".tsv") else ","
-    raw = pd.read_csv(uploaded, sep=sep)
-    data = coerce_kstar_schema(raw)
+    # Read/standardize each file, then concatenate if both are provided
+    dfs = []
+    for f in [file1, file2]:
+        if f is None:
+            continue
+        raw = pd.read_csv(f, sep="\t")
+        dfs.append(coerce_kstar_schema(raw))
+    data = pd.concat(dfs, ignore_index=True) if len(dfs) > 1 else dfs[0]
+
     data["Kinase"] = data["Kinase"].astype(str)
     data["Sample"] = data["Sample"].astype(str)
 
@@ -165,7 +178,6 @@ else:
         st.metric("Kinases", data["Kinase"].nunique())
         st.metric("Samples", data["Sample"].nunique())
         st.metric("Total rows", len(data))
-
     download_csv_button(data, "Download cleaned long-format table", "kstar_long_table.csv")
 
     # Heatmap
@@ -182,11 +194,7 @@ else:
         zmat = zmat.loc[zmat.mean(axis=1, skipna=True).sort_values(ascending=False).index]
 
     topn = st.slider("Show top N most variable kinases (0 = all)", 0, max(10, zmat.shape[0]), 0)
-    if topn > 0 and zmat.shape[0] > topn:
-        order = zmat.var(axis=1, skipna=True).sort_values(ascending=False).index[:topn]
-        zplot = zmat.loc[order]
-    else:
-        zplot = zmat
+    zplot = zmat.loc[zmat.var(axis=1, skipna=True).sort_values(ascending=False).index[:topn]] if (topn > 0 and zmat.shape[0] > topn) else zmat
 
     fig_hm = px.imshow(
         zplot,
@@ -244,5 +252,6 @@ else:
             download_csv_button(filt, "Download filtered significant kinases (CSV)", "kstar_diff_significant.csv")
     except Exception as e:
         st.info(f"Set exactly two group labels to run the analysis. Details: {e}")
+
 
     
