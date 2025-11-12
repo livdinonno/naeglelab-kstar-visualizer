@@ -27,7 +27,6 @@ def home_page():
 
     st.divider()
     st.markdown("### Ready to explore your data?")
-    st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     st.markdown(
         f"""
         <a href="{KSTAR_URL}" target="_blank"
@@ -41,11 +40,12 @@ def home_page():
             text-decoration: none;
             border: 1px solid #b7e4c7;
         ">
-              Click Here      
+                  Click Here          
         </a>
         """,
         unsafe_allow_html=True
     )
+        st.markdown("Upload your KSTAR output files to begin visualizing your results.")
     
     st.divider()        
     st.caption("Click the button below to view the step-by-step tutorial on GitHub.")
