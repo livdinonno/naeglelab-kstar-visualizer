@@ -40,7 +40,7 @@ def home_page():
             text-decoration: none;
             border: 1px solid #b7e4c7;
         ">
-                            Click Here                    
+          Click Here
         </a>
         """,
         unsafe_allow_html=True
