@@ -14,7 +14,7 @@ KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 st.set_page_config(page_title="KSTAR Results Plotter", layout="wide")
 
 # Helpers
-def _std(s): 
+def _std(s):
     return str(s).strip().lower()
 
 def _melt_wide(df, value_name):
@@ -207,7 +207,7 @@ with st.sidebar:
             st.markdown(f"- [{pub['title']}]({pub['url']})")
     st.markdown("---")
     st.subheader("External Links")
-    st.caption("Run KSTAR to generate kinase activity output (external runner).")
+    st.caption("Run KSTAR to generate kinase activity output.")
     st.markdown(f"- [{KSTAR_URL}]({KSTAR_URL})")
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
@@ -274,8 +274,8 @@ if file_fpr is not None:
 st.divider()
 st.subheader("1) Activity vs FPR Dot Plot")
 st.markdown(
-    "This plot shows one dot for each kinase in each sample. A red dot means it meets the FPR threshold (commonly 0.05); "
-    "a light gray dot means it does not. Larger dots mean higher confidence (lower FPR). "
+    "This plot shows one dot for each kinase in each sample. A red dot means it meets the FPR threshold (commonly 0.05). "
+    "A light gray dot means it does not. Larger dots mean higher confidence, which corresponds to lower FPR. "
     "You can change the threshold, limit the view to the top results by confidence, and choose how to order the axes."
 )
 
@@ -287,11 +287,11 @@ else:
         fpr_thr = st.number_input(
             "FPR threshold", min_value=0.0, max_value=1.0, value=0.05, step=0.01
         )
-        st.caption("Points with FPR at or below this value are red (significant).")
+        st.caption("Dots with FPR at or below this value are treated as significant.")
     with c2:
-        topn_conf = st.slider("Top N by confidence (0 = show all)", 0, 5000, 0)
+        topn_conf = st.slider("Top N by confidence (0 shows all)", 0, 5000, 0)
         st.caption(
-            "Shows only the N dots with the lowest FPR (highest confidence). Set 0 to show all dots."
+            "N is the number of kinase and sample pairs you keep. For example, N equal to 100 shows the 100 pairs with the lowest FPR."
         )
     with c3:
         order_mode = st.radio(
@@ -299,10 +299,22 @@ else:
             ["Keep file order", "Alphabetical", "Cluster", "Custom"],
             horizontal=True,
         )
-        st.caption(
-            "Keep file order = original input order. Alphabetical = sort by name. "
-            "Cluster = group by similarity. Custom = paste your own order."
-        )
+        if order_mode == "Keep file order":
+            st.caption(
+                "Displays kinases and samples in the same order as they appear in the uploaded files."
+            )
+        elif order_mode == "Alphabetical":
+            st.caption(
+                "Displays kinases and samples sorted alphabetically by name."
+            )
+        elif order_mode == "Cluster":
+            st.caption(
+                "Groups kinases and samples that have similar score patterns next to each other."
+            )
+        elif order_mode == "Custom":
+            st.caption(
+                "Uses the comma separated orders you enter in the text boxes below."
+            )
 
     custom_k_order, custom_s_order = None, None
     if order_mode == "Custom":
@@ -394,69 +406,63 @@ else:
             mode="markers",
             marker=dict(size=16, color="#d3d3d3"),
             showlegend=True,
-            name=f"Not Significant (FPR > {fpr_thr:g})",
+            name=f"Not significant (FPR > {fpr_thr:g})",
         )
     )
-    fig_dot.add_trace(
-        go.Scatter(
-            x=[None],
-            y=[None],
-            mode="markers",
-            marker=dict(size=1, color="rgba(0,0,0,0)"),
-            showlegend=True,
-            name="Higher confidence ↓",
-        )
-    )
-    for s in [32, 24, 16, 8]:
-        fig_dot.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(size=s, color="#d62728"),
-                showlegend=True,
-                name=f"size {s}",
-            )
-        )
 
     fig_dot.update_layout(
-        title="Red = Significant; Gray = Not Significant. Larger dots = higher confidence (lower FPR).",
-        margin=dict(l=0, r=0, t=40, b=0),
+        margin=dict(l=0, r=0, t=10, b=0),
         height=620,
         legend_title_text="",
     )
     fig_dot.update_yaxes(categoryorder="array", categoryarray=y_order)
     fig_dot.update_xaxes(categoryorder="array", categoryarray=x_order)
     st.plotly_chart(fig_dot, use_container_width=True)
+    st.markdown(
+        "Dot size key for confidence: 8 ● → 16 ● → 24 ● → 32 ●. Confidence increases from left to right, "
+        "so the largest dots represent the lowest FPR and the highest confidence."
+    )
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
 # 2) Heatmap
 st.divider()
 st.subheader("2) Activity Heatmap")
 st.markdown(
-    "Rows are kinases and columns are samples. The color shows how each sample compares to that kinase’s own average (a z-score). "
-    "Values near 0 are close to average for that kinase. Positive values mean higher than average. Negative values mean lower than average. "
-    "Reordering by row variance brings the most variable kinases to the top; reordering by row mean brings kinases with higher average activity to the top. "
-    "Top N limits the view to only the N most variable kinases. You can enable clustering to group similar rows and columns."
+    "Rows are kinases and columns are samples. The color shows how each sample compares to that kinase average score, expressed as a z score. "
+    "Values near 0 are close to average for that kinase. Positive values mean higher than average. Negative values mean lower than average."
 )
 mat = merged.pivot_table(
     index="Kinase", columns="Sample", values="Score", aggfunc="mean"
 )
-cluster_heatmap = st.checkbox("Cluster kinases and samples (heatmap)", value=False)
+cluster_heatmap = st.checkbox("Cluster kinases and samples", value=False)
 if cluster_heatmap and mat.shape[0] >= 3 and mat.shape[1] >= 2:
     r_order, c_order = _cluster_order(mat.fillna(mat.mean(axis=1)))
     mat = mat.loc[r_order, c_order]
+    st.caption(
+        "Clustering reorders rows and columns so kinases and samples with similar score patterns appear near each other."
+    )
 zmat = (mat - mat.mean(axis=1, skipna=True).values.reshape(-1, 1)) / mat.std(
     axis=1, ddof=1, skipna=True
 ).values.reshape(-1, 1)
-sort_by = st.selectbox("Reorder rows by:", ["None", "Row variance", "Row mean"])
+
+sort_by = st.selectbox("Row ordering", ["None", "Row variance", "Row mean"])
 if sort_by == "Row variance":
     zmat = zmat.loc[zmat.var(axis=1, skipna=True).sort_values(ascending=False).index]
+    st.caption(
+        "Row variance ordering moves kinases with the largest sample to sample changes toward the top."
+    )
 elif sort_by == "Row mean":
     zmat = zmat.loc[
         zmat.mean(axis=1, skipna=True).sort_values(ascending=False).index
     ]
-topn = st.slider("Top N most variable kinases (0 = show all)", 0, max(10, zmat.shape[0]), 0)
+    st.caption(
+        "Row mean ordering moves kinases with higher average scores toward the top."
+    )
+
+topn = st.slider("Top N most variable kinases", 0, max(10, zmat.shape[0]), 0)
+st.caption(
+    "N is the number of kinases kept in the heatmap. For example, N equal to 20 shows the 20 most variable kinases and hides the rest. Set 0 to show all."
+)
 if topn == 0 or zmat.shape[0] <= topn:
     zplot = zmat
 else:
@@ -476,14 +482,12 @@ fig_download_controls(fig_hm, "kstar_activity_heatmap", "heatmap_dl")
 
 # 3) Data preview
 st.divider()
-st.subheader("3) Data Preview and What It Means")
+st.subheader("3) Data Preview")
 left, right = st.columns([2, 1])
 with left:
     st.markdown(
-        "This is the standardized table used by all plots. Total rows is the number of kinase–sample pairs "
-        "(for example, 850 means 850 specific kinase–sample combinations). Score goes from 0 to 1 and summarizes evidence "
-        "that a kinase is active in a sample (closer to 1 is stronger). FPR goes from 0 to 1 and measures confidence "
-        "(lower is better; values at or below 0.05 are commonly treated as significant)."
+        "This table is the standardized data used by all plots. Each row is a single kinase and sample pair, "
+        "with its activity score and, when provided, its FPR."
     )
     st.dataframe(merged.head(50), use_container_width=True)
 with right:
@@ -493,8 +497,13 @@ with right:
     st.markdown(
         """
         <div style="border:1px solid #ddd; border-radius:8px; padding:8px; margin-top:6px;">
-          <div><b>Score</b>: 0 — weaker evidence &nbsp;&nbsp; | &nbsp;&nbsp; 1 — stronger evidence</div>
-          <div><b>FPR</b>: 1 — lower confidence &nbsp;&nbsp; | &nbsp;&nbsp; 0 — higher confidence</div>
+          <div><b>Score</b></div>
+          <div>0 on the left, weaker evidence a kinase is active in a sample.</div>
+          <div>1 on the right, stronger evidence a kinase is active in a sample.</div>
+          <br>
+          <div><b>FPR</b></div>
+          <div>0 on the left, higher confidence that the hit is real, less likely to be a false positive.</div>
+          <div>1 on the right, lower confidence that the hit is real, more likely to be a false positive.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -508,10 +517,10 @@ st.download_button(
 
 # 4) Kinase detail
 st.divider()
-st.subheader("4) Kinase Detail (per-sample view)")
+st.subheader("4) Kinase Detail")
 st.markdown(
-    "Pick a kinase to see its scores across samples. Dots show individual values and the box shows spread. "
-    "Use this view to confirm whether the kinase stays high or low in the samples you care about."
+    "Select a kinase to see its scores across samples. Dots show individual values and the box summarizes the spread. "
+    "This view helps you confirm whether a kinase tends to be higher or lower in specific samples."
 )
 sel_kinase = st.selectbox("Choose a kinase", sorted(merged["Kinase"].unique()))
 subk = merged[merged["Kinase"] == sel_kinase].copy()
@@ -534,12 +543,11 @@ st.download_button(
 
 # 5) Differential analysis
 st.divider()
-st.subheader("5) Differential Analysis (two groups)")
+st.subheader("5) Differential Analysis")
 st.markdown(
-    "This compares two groups of samples, for example Control versus Treated. For each kinase, the app computes the difference in average score "
-    "between the two groups and runs a statistical test, then adjusts for multiple comparisons. "
-    "The volcano plot shows effect size on the x-axis (Group B minus Group A) and statistical strength on the y-axis. "
-    "Label samples into exactly two groups below. Each group should have at least two samples for stable results."
+    "This compares two groups of samples, for example Control and Treated. For each kinase, the app computes the difference in average score "
+    "between the two groups and runs a statistical test with multiple comparison correction. "
+    "The volcano plot shows the difference between groups on the x axis and the strength of the evidence on the y axis."
 )
 samples = sorted(merged["Sample"].unique())
 default_groups = ensure_groups_from_metadata(samples)
@@ -547,7 +555,7 @@ editable = pd.DataFrame(
     {"Sample": samples, "Group": [default_groups[s] for s in samples]}
 )
 st.markdown(
-    "Edit group labels below (two distinct group names, at least two samples in each)."
+    "Edit group labels below. You must have exactly two group names and each group should have at least two samples."
 )
 group_df = st.data_editor(editable, use_container_width=True, hide_index=True)
 group_map = dict(zip(group_df["Sample"], group_df["Group"]))
@@ -569,13 +577,13 @@ try:
             "N_A",
             "N_B",
         ],
-        title="Volcano: difference (B − A) vs statistical strength",
+        title="Difference between groups (B minus A) versus FDR adjusted evidence",
     )
     fig_volc.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=500)
     st.plotly_chart(fig_volc, use_container_width=True)
     fig_download_controls(fig_volc, "kstar_volcano_plot", "volcano_dl")
 
-    st.markdown("You can filter the table to focus on important changes.")
+    st.markdown("You can filter the table of results to focus on the most important changes.")
     fdr_thr = st.slider("FDR threshold", 0.0, 0.25, 0.05, 0.01)
     absdiff_thr_default = float(
         np.nanmax(np.abs(plot_df["Diff_B_minus_A"])) if len(plot_df) else 1.0
@@ -603,8 +611,7 @@ try:
 
 except Exception as e:
     st.info(
-        f"Set exactly two valid group labels with enough samples per group. Details: {e}"
+        f"Set exactly two valid group labels with enough samples in each group to run the analysis. Details: {e}"
     )
-
 
 
