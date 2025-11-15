@@ -288,10 +288,12 @@ else:
         fpr_thr = st.number_input(
             "FPR threshold", min_value=0.0, max_value=1.0, value=0.05, step=0.01
         )
+        st.caption("Dots with FPR ≤ threshold are red (significant); others are grey.")
     with c2:
         topn_conf = st.slider("Top N by confidence (0 = all)", 0, 5000, 0)
         st.caption(
-            "Top N is applied to kinase–sample pairs by lowest FPR. Setting this > 0 can hide some kinases entirely."
+            "Top N is applied to kinase–sample pairs by lowest FPR. "
+            "If N is small, only the best hits (often in a few samples) will be shown."
         )
     with c3:
         order_mode = st.radio(
@@ -306,8 +308,9 @@ else:
             horizontal=True,
         )
 
-    # show how many kinases are actually in the file (you should see 50 here)
-    st.caption(f"Total kinases detected in activity file: {merged['Kinase'].nunique()}")
+    # how many kinases total
+    total_kinases = merged["Kinase"].nunique()
+    st.caption(f"Total kinases detected in activity file: {total_kinases}")
 
     custom_k_order, custom_s_order = None, None
     if order_mode == "Manual Reordering":
@@ -331,14 +334,17 @@ else:
     working = dot.copy()
     conf_score = -np.log10(working["FPR"])
     if topn_conf > 0 and len(working) > topn_conf:
+        # keep top N lowest-FPR pairs (highest confidence)
         working = working.iloc[np.argsort(-conf_score)[:topn_conf]]
 
     file_k_order = list(pd.Index(merged["Kinase"]).drop_duplicates())
     file_s_order = list(pd.Index(merged["Sample"]).drop_duplicates())
 
+    # default orders
     y_order = file_k_order
     x_order = file_s_order
 
+    # mean activity for ordering
     mean_activity = (
         merged.groupby("Kinase")["Score"]
         .mean()
@@ -371,6 +377,7 @@ else:
             r_order, c_order = _cluster_order(pivot)
             y_order, x_order = r_order, c_order
 
+    # sizes + colors
     nl = (-np.log10(working["FPR"])).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     bins = [0, 1, 2, 3, np.inf]
     labels = [8, 16, 24, 32]
@@ -379,6 +386,21 @@ else:
     colors = np.where(working["Significant"] == "Sig", "#d62728", "#d3d3d3")
 
     fig_dot = go.Figure()
+
+    # invisible dummy trace to force all kinases onto the axis (so you can always see/count all 50)
+    if len(x_order) > 0:
+        fig_dot.add_trace(
+            go.Scatter(
+                x=[x_order[0]] * len(y_order),
+                y=y_order,
+                mode="markers",
+                marker=dict(size=0, color="rgba(0,0,0,0)"),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+    # real data points
     fig_dot.add_trace(
         go.Scatter(
             x=working["Sample"],
@@ -398,7 +420,8 @@ else:
             showlegend=False,
         )
     )
-    # significance key (legend)
+
+    # legend entries for significance
     fig_dot.add_trace(
         go.Scatter(
             x=[None],
@@ -421,8 +444,8 @@ else:
     )
 
     fig_dot.update_layout(
-        margin=dict(l=140, r=20, t=10, b=40),
-        height=900,  # taller so ~50 kinases are more visually separated
+        margin=dict(l=160, r=20, t=10, b=40),
+        height=900,  # taller so ~50 kinases are more separated
         legend_title_text="",
     )
     fig_dot.update_yaxes(
@@ -437,7 +460,7 @@ else:
     st.plotly_chart(fig_dot, use_container_width=True)
     st.markdown(
         "Dot size key for confidence: 8 ● → 16 ● → 24 ● → 32 ●. "
-        "Larger dots = lower FPR (higher confidence)."
+        "Larger dots = lower FPR (higher confidence). If you want to see all grey dots and all samples, set **Top N by confidence** to 0."
     )
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
@@ -591,4 +614,5 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
+
 
