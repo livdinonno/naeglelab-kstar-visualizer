@@ -290,6 +290,9 @@ else:
         )
     with c2:
         topn_conf = st.slider("Top N by confidence (0 = all)", 0, 5000, 0)
+        st.caption(
+            "Top N is applied to kinase–sample pairs by lowest FPR. Setting this > 0 can hide some kinases entirely."
+        )
     with c3:
         order_mode = st.radio(
             "Kinase ordering",
@@ -302,6 +305,9 @@ else:
             ],
             horizontal=True,
         )
+
+    # show how many kinases are actually in the file (you should see 50 here)
+    st.caption(f"Total kinases detected in activity file: {merged['Kinase'].nunique()}")
 
     custom_k_order, custom_s_order = None, None
     if order_mode == "Manual Reordering":
@@ -392,12 +398,33 @@ else:
             showlegend=False,
         )
     )
+    # significance key (legend)
+    fig_dot.add_trace(
+        go.Scatter(
+            x=[None],
+            y=[None],
+            mode="markers",
+            marker=dict(size=16, color="#d62728"),
+            showlegend=True,
+            name=f"Significant (FPR ≤ {fpr_thr:g})",
+        )
+    )
+    fig_dot.add_trace(
+        go.Scatter(
+            x=[None],
+            y=[None],
+            mode="markers",
+            marker=dict(size=16, color="#d3d3d3"),
+            showlegend=True,
+            name=f"Not significant (FPR > {fpr_thr:g})",
+        )
+    )
 
     fig_dot.update_layout(
         margin=dict(l=140, r=20, t=10, b=40),
-        height=620,
+        height=900,  # taller so ~50 kinases are more visually separated
+        legend_title_text="",
     )
-
     fig_dot.update_yaxes(
         categoryorder="array",
         categoryarray=y_order,
@@ -408,13 +435,17 @@ else:
     )
 
     st.plotly_chart(fig_dot, use_container_width=True)
+    st.markdown(
+        "Dot size key for confidence: 8 ● → 16 ● → 24 ● → 32 ●. "
+        "Larger dots = lower FPR (higher confidence)."
+    )
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
-# 2) Heatmap
+# 2) Activity Heatmap
 st.divider()
 st.subheader("2) Activity Heatmap")
 st.markdown(
-    "Color represents z-score of kinase activity across samples."
+    "Color represents z-score of kinase activity across samples (per-kinase mean centered, SD scaled)."
 )
 
 mat = merged.pivot_table(
@@ -453,7 +484,7 @@ fig_hm = px.imshow(
     color_continuous_scale="RdBu",
     origin="lower",
 )
-fig_hm.update_layout(margin=dict(l=140, r=20, t=30, b=40), height=600)
+fig_hm.update_layout(margin=dict(l=140, r=20, t=30, b=40), height=900)
 st.plotly_chart(fig_hm, use_container_width=True)
 fig_download_controls(fig_hm, "kstar_activity_heatmap", "heatmap_dl")
 
@@ -503,6 +534,9 @@ samples = sorted(merged["Sample"].unique())
 default_groups = ensure_groups_from_metadata(samples)
 editable = pd.DataFrame(
     {"Sample": samples, "Group": [default_groups[s] for s in samples]}
+)
+st.markdown(
+    "Edit group labels below. You must have exactly two group names and each group should have at least two samples."
 )
 group_df = st.data_editor(editable, use_container_width=True, hide_index=True)
 group_map = dict(zip(group_df["Sample"], group_df["Group"]))
@@ -557,3 +591,4 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
+
