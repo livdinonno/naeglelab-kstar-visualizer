@@ -7,13 +7,15 @@ import plotly.io as pio
 from scipy import stats
 from scipy.cluster.hierarchy import linkage, leaves_list
 from statsmodels.stats.multitest import multipletests
+from io import BytesIO
+from PIL import Image
 
 TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world"
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 
 st.set_page_config(page_title="KSTAR Results Plotter", layout="wide")
 
-# Helpers
+# helpers
 def _std(s):
     return str(s).strip().lower()
 
@@ -161,9 +163,6 @@ def fig_download_controls(fig, base_filename, key_prefix):
                 }[fmt],
             )
         else:
-            from io import BytesIO
-            from PIL import Image
-
             png = pio.to_image(fig, format="png", scale=2)
             im = Image.open(BytesIO(png)).convert("RGB")
             bio = BytesIO()
@@ -193,9 +192,9 @@ def fig_download_controls(fig, base_filename, key_prefix):
         )
         st.info(f"Could not generate {fmt}. Saved HTML instead. Details: {e}")
 
-# Sidebar
+# sidebar
 with st.sidebar:
-    st.subheader("Related Publications")
+    st.subheader("Background Context")
     with st.expander("Related Publications", expanded=False):
         publications = [
             {
@@ -212,7 +211,7 @@ with st.sidebar:
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
 
-# Title and intro
+# title
 st.markdown(
     "<h1 style='text-align:center; margin-top:0;'>KSTAR Results Plotter</h1>",
     unsafe_allow_html=True,
@@ -220,17 +219,20 @@ st.markdown(
 with st.container():
     st.markdown(
         """
-        <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px;'>
-          KSTAR estimates which kinases are active in each sample using phosphosite evidence and known kinase–substrate relationships. 
-          You will see two numbers: a score and a false positive rate (FPR). Both go from 0 to 1. A score near 1 suggests stronger evidence 
-          the kinase is active in that sample, while a score near 0 suggests weaker evidence. A lower FPR means higher confidence in that call. 
-          An FPR of 0.05 or lower is a common threshold for significance.
+        <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px; font-size:0.95rem;'>
+          <b>How to read KSTAR output:</b><br>
+          <ul style="margin-top:0.35rem; padding-left:1.3rem;">
+            <li><b>Score (0 → 1)</b> &mdash; how strongly the phosphosite pattern supports that kinase being active in a sample.</li>
+            <li><b>False Positive Rate, FPR (0 → 1)</b> &mdash; how often a score this strong would appear by chance under a null model.</li>
+            <li><b>High score + low FPR</b> &rarr; stronger and more reliable evidence that the kinase is truly active.</li>
+            <li>FPR ≤ 0.05 is a common cutoff for calling a hit “significant.”</li>
+          </ul>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# Uploads
+# uploads
 colA, colB = st.columns(2)
 with colA:
     st.markdown(
@@ -261,7 +263,7 @@ if not file_activity:
     )
     st.stop()
 
-# Read and merge
+# read and merge
 act_raw = pd.read_csv(file_activity, sep="\t")
 activity = coerce_activity(act_raw)
 merged = activity.copy()
@@ -276,7 +278,7 @@ st.subheader("1) Activity vs FPR Dot Plot")
 st.markdown(
     "This plot shows one dot for each kinase in each sample. A red dot means it meets the FPR threshold (commonly 0.05). "
     "A light gray dot means it does not. Larger dots mean higher confidence, which corresponds to lower FPR. "
-    "You can change the threshold, limit the view to the top results by confidence, and choose how to order the axes."
+    "You can change the threshold, limit the view to the top results by confidence, and choose how to order the kinases."
 )
 
 if "FPR" not in merged.columns or merged["FPR"].isna().all():
@@ -295,29 +297,29 @@ else:
         )
     with c3:
         order_mode = st.radio(
-            "Axis order",
-            ["Keep file order", "Alphabetical", "Cluster", "Custom"],
+            "Kinase ordering",
+            [
+                "No Sorting",
+                "By Activity (Descending)",
+                "By Activity (Ascending)",
+                "Manual Reordering",
+                "By Hierarchical Clustering",
+            ],
             horizontal=True,
         )
-        if order_mode == "Keep file order":
-            st.caption(
-                "Displays kinases and samples in the same order as they appear in the uploaded files."
-            )
-        elif order_mode == "Alphabetical":
-            st.caption(
-                "Displays kinases and samples sorted alphabetically by name."
-            )
-        elif order_mode == "Cluster":
-            st.caption(
-                "Groups kinases and samples that have similar score patterns next to each other."
-            )
-        elif order_mode == "Custom":
-            st.caption(
-                "Uses the comma separated orders you enter in the text boxes below."
-            )
+        if order_mode == "No Sorting":
+            st.caption("Uses the kinase order as it appears in the uploaded file.")
+        elif order_mode == "By Activity (Descending)":
+            st.caption("Ranks kinases from highest to lowest mean activity (Score) across samples.")
+        elif order_mode == "By Activity (Ascending)":
+            st.caption("Ranks kinases from lowest to highest mean activity (Score) across samples.")
+        elif order_mode == "Manual Reordering":
+            st.caption("Uses the comma-separated orders you enter below for kinases (and optionally samples).")
+        elif order_mode == "By Hierarchical Clustering":
+            st.caption("Groups kinases and samples with similar score patterns next to each other.")
 
     custom_k_order, custom_s_order = None, None
-    if order_mode == "Custom":
+    if order_mode == "Manual Reordering":
         t1, t2 = st.columns(2)
         with t1:
             custom_k_order = st.text_area(
@@ -326,7 +328,7 @@ else:
             )
         with t2:
             custom_s_order = st.text_area(
-                "Sample order (comma separated)",
+                "Sample order (optional, comma separated)",
                 placeholder="Sample1, Sample2, Sample3, Sample4",
             )
 
@@ -342,10 +344,38 @@ else:
 
     file_k_order = list(pd.Index(merged["Kinase"]).drop_duplicates())
     file_s_order = list(pd.Index(merged["Sample"]).drop_duplicates())
-    if order_mode == "Alphabetical":
-        y_order = sorted(working["Kinase"].unique())
-        x_order = sorted(working["Sample"].unique())
-    elif order_mode == "Cluster":
+
+    # default orders
+    y_order = file_k_order
+    x_order = file_s_order
+
+    # mean activity per kinase for ordering
+    mean_activity = (
+        merged.groupby("Kinase")["Score"]
+        .mean()
+        .reindex(file_k_order)
+    )
+
+    if order_mode == "By Activity (Descending)":
+        y_order = list(mean_activity.sort_values(ascending=False).index)
+    elif order_mode == "By Activity (Ascending)":
+        y_order = list(mean_activity.sort_values(ascending=True).index)
+    elif order_mode == "Manual Reordering":
+        def _parse_list(txt):
+            return [t.strip() for t in txt.split(",") if t.strip()]
+
+        if custom_k_order:
+            k_manual = _parse_list(custom_k_order)
+            # keep valid kinases, then append any missing to the end in file order
+            k_manual = [k for k in k_manual if k in file_k_order]
+            k_missing = [k for k in file_k_order if k not in k_manual]
+            y_order = k_manual + k_missing
+        if custom_s_order:
+            s_manual = _parse_list(custom_s_order)
+            s_manual = [s for s in s_manual if s in file_s_order]
+            s_missing = [s for s in file_s_order if s not in s_manual]
+            x_order = s_manual + s_missing
+    elif order_mode == "By Hierarchical Clustering":
         pivot = working.pivot_table(
             index="Kinase", columns="Sample", values="Score", aggfunc="mean"
         ).fillna(0)
@@ -354,13 +384,6 @@ else:
             y_order, x_order = r_order, c_order
         else:
             y_order, x_order = file_k_order, file_s_order
-    elif order_mode == "Custom":
-        def _parse_list(txt):
-            return [t.strip() for t in txt.split(",") if t.strip()]
-        y_order = _parse_list(custom_k_order) if custom_k_order else file_k_order
-        x_order = _parse_list(custom_s_order) if custom_s_order else file_s_order
-    else:
-        y_order, x_order = file_k_order, file_s_order
 
     nl = (-np.log10(working["FPR"])).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     bins = [0, 1, 2, 3, np.inf]
@@ -411,12 +434,19 @@ else:
     )
 
     fig_dot.update_layout(
-        margin=dict(l=0, r=0, t=10, b=0),
+        margin=dict(l=140, r=20, t=10, b=40),
         height=620,
         legend_title_text="",
     )
-    fig_dot.update_yaxes(categoryorder="array", categoryarray=y_order)
-    fig_dot.update_xaxes(categoryorder="array", categoryarray=x_order)
+    fig_dot.update_yaxes(
+        categoryorder="array",
+        categoryarray=y_order,
+        categorygap=0.3,  # space kinases out a bit
+    )
+    fig_dot.update_xaxes(
+        categoryorder="array",
+        categoryarray=x_order,
+    )
     st.plotly_chart(fig_dot, use_container_width=True)
     st.markdown(
         "Dot size key for confidence: 8 ● → 16 ● → 24 ● → 32 ●. Confidence increases from left to right, "
@@ -476,7 +506,8 @@ fig_hm = px.imshow(
     color_continuous_scale="RdBu",
     origin="lower",
 )
-fig_hm.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=600)
+fig_hm.update_layout(margin=dict(l=140, r=20, t=30, b=40), height=600)
+fig_hm.update_yaxes(categorygap=0.3)  # space kinases out in heatmap as well
 st.plotly_chart(fig_hm, use_container_width=True)
 fig_download_controls(fig_hm, "kstar_activity_heatmap", "heatmap_dl")
 
@@ -496,14 +527,14 @@ with right:
     st.metric("Total rows", len(merged))
     st.markdown(
         """
-        <div style="border:1px solid #ddd; border-radius:8px; padding:8px; margin-top:6px;">
+        <div style="border:1px solid #ddd; border-radius:8px; padding:8px; margin-top:6px; font-size:0.9rem;">
           <div><b>Score</b></div>
-          <div>0 on the left, weaker evidence a kinase is active in a sample.</div>
-          <div>1 on the right, stronger evidence a kinase is active in a sample.</div>
+          <div>Closer to 0 &rarr; weaker evidence the kinase is active in that sample.</div>
+          <div>Closer to 1 &rarr; stronger evidence the kinase is active in that sample.</div>
           <br>
           <div><b>FPR</b></div>
-          <div>0 on the left, higher confidence that the hit is real, less likely to be a false positive.</div>
-          <div>1 on the right, lower confidence that the hit is real, more likely to be a false positive.</div>
+          <div>Closer to 0 &rarr; higher confidence the hit is real (less likely false positive).</div>
+          <div>Closer to 1 &rarr; lower confidence the hit is real (more likely false positive).</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -531,7 +562,7 @@ fig_box = px.box(
     points="all",
     title=f"{sel_kinase} activity per sample",
 )
-fig_box.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=450)
+fig_box.update_layout(margin=dict(l=40, r=20, t=40, b=40), height=450)
 st.plotly_chart(fig_box, use_container_width=True)
 fig_download_controls(fig_box, f"{sel_kinase}_detail", "kinase_detail_dl")
 st.download_button(
@@ -579,7 +610,7 @@ try:
         ],
         title="Difference between groups (B minus A) versus FDR adjusted evidence",
     )
-    fig_volc.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=500)
+    fig_volc.update_layout(margin=dict(l=40, r=20, t=40, b=40), height=500)
     st.plotly_chart(fig_volc, use_container_width=True)
     fig_download_controls(fig_volc, "kstar_volcano_plot", "volcano_dl")
 
@@ -613,5 +644,3 @@ except Exception as e:
     st.info(
         f"Set exactly two valid group labels with enough samples in each group to run the analysis. Details: {e}"
     )
-
-
