@@ -125,12 +125,14 @@ def compute_group_stats(df_long, group_map):
     return res
 
 def _cluster_order(matrix_df):
+    # cluster rows
     row_valid = matrix_df.fillna(matrix_df.mean(axis=1))
     try:
         row_link = linkage(row_valid.values, method="average", metric="euclidean")
         row_order = row_valid.index[leaves_list(row_link)]
     except Exception:
         row_order = matrix_df.index
+    # cluster columns
     col_valid = matrix_df.T.fillna(matrix_df.T.mean(axis=1))
     try:
         col_link = linkage(col_valid.values, method="average", metric="euclidean")
@@ -220,13 +222,11 @@ with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px; font-size:0.95rem;'>
-          <b>How to read KSTAR output:</b><br>
-          <ul style="margin-top:0.35rem; padding-left:1.3rem;">
-            <li><b>Score (0 → 1)</b> — strength of evidence that the kinase is active in the sample.</li>
-            <li><b>FPR (0 → 1)</b> — probability the score could appear by chance.</li>
-            <li><b>High score + low FPR</b> → strong, reliable signal.</li>
-            <li>FPR ≤ 0.05 is a common cutoff for significance.</li>
-          </ul>
+          This page helps you explore kinase activity results produced by KSTAR.
+          Upload the activity file and, optionally, the FPR file from a KSTAR run,
+          and the app will summarize how kinase activity patterns change across your samples.
+          Below, you can view an activity–FPR dot plot, a heatmap across samples,
+          the cleaned data table, single-kinase views, and a simple two-group comparison.
         </div>
         """,
         unsafe_allow_html=True,
@@ -276,8 +276,9 @@ if file_fpr is not None:
 st.divider()
 st.subheader("1) Activity vs FPR Dot Plot")
 st.markdown(
-    "Each dot is a kinase–sample pair. Red = significant (FPR ≤ threshold). "
-    "Grey = not significant. Dot size reflects confidence (lower FPR → larger dot)."
+    "Each dot is a kinase–sample pair. The activity **Score** summarizes how strongly KSTAR infers that a kinase is active in that sample (values closer to 1 are stronger signals). "
+    "The **FPR** (false positive rate) is the probability that a score of that size could appear by chance. "
+    "High score with low FPR means a strong and reliable signal for that kinase in that sample."
 )
 
 if "FPR" not in merged.columns or merged["FPR"].isna().all():
@@ -293,7 +294,7 @@ else:
         topn_conf = st.slider("Top N by confidence (0 = all)", 0, 5000, 0)
         st.caption(
             "Top N is applied to kinase–sample pairs by lowest FPR. "
-            "If N is small, only the best hits (often in a few samples) will be shown."
+            "If N is small, only the most confident kinase–sample pairs will be shown."
         )
     with c3:
         order_mode = st.radio(
@@ -377,10 +378,10 @@ else:
             r_order, c_order = _cluster_order(pivot)
             y_order, x_order = r_order, c_order
 
-    # sizes + colors
+    # sizes + colors (smaller than before to reduce overlap)
     nl = (-np.log10(working["FPR"])).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     bins = [0, 1, 2, 3, np.inf]
-    labels = [8, 16, 24, 32]
+    labels = [6, 10, 14, 18]  # smaller dots → less visual pile-up
     idx = np.digitize(nl, bins) - 1
     size_vals = np.array(labels)[np.clip(idx, 0, len(labels) - 1)]
     colors = np.where(working["Significant"] == "Sig", "#d62728", "#d3d3d3")
@@ -406,7 +407,7 @@ else:
             x=working["Sample"],
             y=working["Kinase"],
             mode="markers",
-            marker=dict(size=size_vals, color=colors, line=dict(width=0)),
+            marker=dict(size=size_vals, color=colors, line=dict(width=0), opacity=0.9),
             text=[
                 f"Kinase: {k}<br>Sample: {s}<br>Score: {sc:.3g}<br>FPR: {f:.3g}"
                 for k, s, sc, f in zip(
@@ -427,7 +428,7 @@ else:
             x=[None],
             y=[None],
             mode="markers",
-            marker=dict(size=16, color="#d62728"),
+            marker=dict(size=10, color="#d62728"),
             showlegend=True,
             name=f"Significant (FPR ≤ {fpr_thr:g})",
         )
@@ -437,14 +438,14 @@ else:
             x=[None],
             y=[None],
             mode="markers",
-            marker=dict(size=16, color="#d3d3d3"),
+            marker=dict(size=10, color="#d3d3d3"),
             showlegend=True,
             name=f"Not significant (FPR > {fpr_thr:g})",
         )
     )
 
-    # dynamic height to space kinases more like the other plotter
-    plot_height = min(1400, max(700, 18 * len(y_order) + 220))
+    # dynamic height to space kinases more clearly (closer to the other plotter)
+    plot_height = min(1600, max(800, 22 * len(y_order) + 220))
 
     fig_dot.update_layout(
         margin=dict(l=160, r=40, t=30, b=40),
@@ -466,7 +467,8 @@ else:
     with plot_col:
         st.plotly_chart(fig_dot, use_container_width=True)
         st.caption(
-            "If you want to see all grey dots and all samples, set **Top N by confidence** to 0."
+            "A tall stack of red points for one kinase–sample combination means that kinase is consistently inferred active there at low FPR. "
+            "Set **Top N by confidence** to 0 to show all kinase–sample pairs, including grey (higher FPR) points."
         )
     with key_col:
         st.markdown(
@@ -475,10 +477,10 @@ else:
               <b>Dot size key</b><br>
               <span style='font-size:0.8rem;'>Relative confidence from FPR</span>
               <div style='margin-top:0.4rem; line-height:1.4;'>
-                8&nbsp;px &nbsp;•&nbsp; highest FPR<br>
-                16&nbsp;px •&nbsp; moderate FPR<br>
-                24&nbsp;px •&nbsp; low FPR<br>
-                32&nbsp;px •&nbsp; lowest FPR<br>
+                6&nbsp;px &nbsp;•&nbsp; highest FPR<br>
+                10&nbsp;px •&nbsp; moderate FPR<br>
+                14&nbsp;px •&nbsp; low FPR<br>
+                18&nbsp;px •&nbsp; lowest FPR<br>
               </div>
               <div style='margin-top:0.4rem; font-size:0.8rem;'>
                 Larger dots = lower FPR (more confident kinase–sample pairs).
@@ -494,7 +496,10 @@ else:
 st.divider()
 st.subheader("2) Activity Heatmap")
 st.markdown(
-    "Color represents z-score of kinase activity across samples (per-kinase mean centered, SD scaled)."
+    "This heatmap shows how each kinase's activity score changes across samples. "
+    "For each kinase, we first compute the mean and standard deviation of its activity across samples, "
+    "then convert each value to a **z-score**: the number of standard deviations above or below that kinase's mean. "
+    "Red cells indicate samples where that kinase is more active than its own average, and blue cells indicate lower-than-average activity."
 )
 
 mat = merged.pivot_table(
@@ -503,12 +508,18 @@ mat = merged.pivot_table(
 
 cluster_heatmap = st.checkbox("Cluster kinases and samples", value=False)
 if cluster_heatmap and mat.shape[0] >= 3 and mat.shape[1] >= 2:
-    r_order, c_order = _cluster_order(mat.fillna(mat.mean(axis=1)))
-    mat = mat.loc[r_order, c_order]
+    try:
+        r_order, c_order = _cluster_order(mat.fillna(mat.mean(axis=1)))
+        mat = mat.loc[r_order, c_order]
+    except Exception as e:
+        st.warning(
+            f"Clustering failed for this dataset, showing unclustered heatmap instead. Details: {e}"
+        )
 
-zmat = (mat - mat.mean(axis=1, skipna=True).values.reshape(-1, 1)) / mat.std(
-    axis=1, ddof=1, skipna=True
-).values.reshape(-1, 1)
+# z-score per kinase
+means = mat.mean(axis=1, skipna=True).values.reshape(-1, 1)
+stds = mat.std(axis=1, ddof=1, skipna=True).replace(0, np.nan).values.reshape(-1, 1)
+zmat = (mat - means) / stds
 
 sort_by = st.selectbox("Row ordering", ["None", "Row variance", "Row mean"])
 if sort_by == "Row variance":
@@ -540,6 +551,11 @@ fig_download_controls(fig_hm, "kstar_activity_heatmap", "heatmap_dl")
 # 3) Data preview
 st.divider()
 st.subheader("3) Data Preview")
+st.markdown(
+    "This table shows the merged long-format KSTAR output used for all plots above. "
+    "Each row is a kinase–sample pair with its activity score and, if provided, FPR. "
+    "You can download this table and use it for your own downstream analysis."
+)
 left, right = st.columns([2, 1])
 with left:
     st.dataframe(merged.head(50), use_container_width=True)
@@ -557,6 +573,10 @@ st.download_button(
 # 4) Kinase detail
 st.divider()
 st.subheader("4) Kinase Detail")
+st.markdown(
+    "Use this section to focus on a single kinase. The plot shows that kinase's activity scores across samples. "
+    "Look for samples where the score is noticeably higher or lower than the rest; those are samples where this kinase is unusually active or inactive."
+)
 sel_kinase = st.selectbox("Choose a kinase", sorted(merged["Kinase"].unique()))
 subk = merged[merged["Kinase"] == sel_kinase].copy()
 fig_box = px.box(
@@ -579,13 +599,19 @@ st.download_button(
 # 5) Differential analysis
 st.divider()
 st.subheader("5) Differential Analysis")
+st.markdown(
+    "Here you can compare kinase activity between two groups of samples (Group A and Group B). "
+    "For each kinase, the tool estimates the difference in mean activity between the groups and reports a p-value and FDR. "
+    "Kinases with large absolute differences and low FDR are the ones most strongly changing between your two conditions."
+)
 samples = sorted(merged["Sample"].unique())
 default_groups = ensure_groups_from_metadata(samples)
 editable = pd.DataFrame(
     {"Sample": samples, "Group": [default_groups[s] for s in samples]}
 )
 st.markdown(
-    "Edit group labels below. You must have exactly two group names and each group should have at least two samples."
+    "Edit the group labels below so that your samples are divided into exactly two groups. "
+    "Each group should have at least two samples for the statistical test to make sense."
 )
 group_df = st.data_editor(editable, use_container_width=True, hide_index=True)
 group_map = dict(zip(group_df["Sample"], group_df["Group"]))
@@ -640,6 +666,4 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
-
-
 
