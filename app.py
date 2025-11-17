@@ -134,7 +134,7 @@ def _cluster_order(matrix_df):
     col_valid = matrix_df.T.fillna(matrix_df.T.mean(axis=1))
     try:
         col_link = linkage(col_valid.values, method="average", metric="euclidean")
-        col_order = matrix_df.columns[leaves_list(col_link)]
+        col_order = col_valid.columns[leaves_list(col_link)]
     except Exception:
         col_order = matrix_df.columns
     return list(row_order), list(col_order)
@@ -443,25 +443,51 @@ else:
         )
     )
 
+    # dynamic height to space kinases more like the other plotter
+    plot_height = min(1400, max(700, 18 * len(y_order) + 220))
+
     fig_dot.update_layout(
-        margin=dict(l=160, r=20, t=10, b=40),
-        height=900,  # taller so ~50 kinases are more separated
+        margin=dict(l=160, r=40, t=30, b=40),
+        height=plot_height,
         legend_title_text="",
     )
     fig_dot.update_yaxes(
         categoryorder="array",
         categoryarray=y_order,
+        tickfont=dict(size=10),
     )
     fig_dot.update_xaxes(
         categoryorder="array",
         categoryarray=x_order,
+        tickangle=-45 if len(x_order) > 6 else 0,
     )
 
-    st.plotly_chart(fig_dot, use_container_width=True)
-    st.markdown(
-        "Dot size key for confidence: 8 ● → 16 ● → 24 ● → 32 ●. "
-        "Larger dots = lower FPR (higher confidence). If you want to see all grey dots and all samples, set **Top N by confidence** to 0."
-    )
+    plot_col, key_col = st.columns([5, 1])
+    with plot_col:
+        st.plotly_chart(fig_dot, use_container_width=True)
+        st.caption(
+            "If you want to see all grey dots and all samples, set **Top N by confidence** to 0."
+        )
+    with key_col:
+        st.markdown(
+            """
+            <div style='font-size:0.85rem; border:1px solid #dddddd; padding:0.5rem 0.75rem; border-radius:6px; background-color:#fafafa;'>
+              <b>Dot size key</b><br>
+              <span style='font-size:0.8rem;'>Relative confidence from FPR</span>
+              <div style='margin-top:0.4rem; line-height:1.4;'>
+                8&nbsp;px &nbsp;•&nbsp; highest FPR<br>
+                16&nbsp;px •&nbsp; moderate FPR<br>
+                24&nbsp;px •&nbsp; low FPR<br>
+                32&nbsp;px •&nbsp; lowest FPR<br>
+              </div>
+              <div style='margin-top:0.4rem; font-size:0.8rem;'>
+                Larger dots = lower FPR (more confident kinase–sample pairs).
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
 # 2) Activity Heatmap
@@ -614,5 +640,6 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
+
 
 
