@@ -192,7 +192,12 @@ def fig_download_controls(fig, base_filename, key_prefix):
             file_name=f"{base_filename}.html",
             mime="text/html",
         )
-        st.info(f"Could not generate {fmt}. Saved HTML instead. Details: {e}")
+        st.info(
+            "Image export for PNG/JPG/SVG/PDF/EPS/TIF requires Plotly's 'kaleido' "
+            "package to be installed in the app environment. Right now only HTML "
+            "export is available. Error details: "
+            f"{e}"
+        )
 
 # Sidebar
 with st.sidebar:
@@ -666,4 +671,5 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
+
 
