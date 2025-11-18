@@ -184,7 +184,8 @@ def fig_download_controls(fig, base_filename, key_prefix):
                     file_name=f"{base_filename}.eps",
                     mime="application/postscript",
                 )
-    except Exception as e:
+    except Exception:
+        # Fallback: always let them grab an HTML version if image export fails
         html = pio.to_html(fig, include_plotlyjs="cdn").encode("utf-8")
         st.download_button(
             "Download HTML (fallback)",
@@ -193,10 +194,8 @@ def fig_download_controls(fig, base_filename, key_prefix):
             mime="text/html",
         )
         st.info(
-            "Image export for PNG/JPG/SVG/PDF/EPS/TIF requires Plotly's 'kaleido' "
-            "package to be installed in the app environment. Right now only HTML "
-            "export is available. Error details: "
-            f"{e}"
+            "Image export for this format is not available in the current environment. "
+            "An HTML version of the figure was provided instead."
         )
 
 # Sidebar
@@ -393,7 +392,7 @@ else:
 
     fig_dot = go.Figure()
 
-    # invisible dummy trace to force all kinases onto the axis (so you can always see/count all 50)
+    # invisible dummy trace to force all kinases onto the axis
     if len(x_order) > 0:
         fig_dot.add_trace(
             go.Scatter(
@@ -449,7 +448,7 @@ else:
         )
     )
 
-    # dynamic height to space kinases more clearly (closer to the other plotter)
+    # dynamic height to space kinases more clearly
     plot_height = min(1600, max(800, 22 * len(y_order) + 220))
 
     fig_dot.update_layout(
@@ -671,5 +670,4 @@ try:
 
 except Exception as e:
     st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
-
 
