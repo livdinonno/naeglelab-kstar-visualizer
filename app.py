@@ -226,7 +226,7 @@ with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px; font-size:0.95rem;'>
-            <p>This site allows you to visualize your data after processing it through the KSTAR algorithm. Below, you can view an activity–FPR dot plot, a heatmap across samples,
+            <p> Welcome to the KSTAR Results Plotter! This site allows you to visualize your data after processing it through the KSTAR algorithm. Below, you can view an activity–FPR dot plot, a heatmap across samples,
           the cleaned data table, and single-kinase views. It also provides quick access to a setup tutorial and relevant publications.</p>
         </div>
         """,
