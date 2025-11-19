@@ -226,11 +226,7 @@ with st.container():
     st.markdown(
         """
         <div style='background-color:#f5f5f5; padding: 1rem 1.25rem; border-radius: 8px; font-size:0.95rem;'>
-          This page helps you explore kinase activity results produced by KSTAR.
-          Upload the activity file and, optionally, the FPR file from a KSTAR run,
-          and the app will summarize how kinase activity patterns change across your samples.
-          Below, you can view an activity–FPR dot plot, a heatmap across samples,
-          the cleaned data table, single-kinase views, and a simple two-group comparison.
+          This site allows you to visualize your data after processing it through the KSTAR algorithm. It also provides quick access to relevant publications and a setup tutorial.
         </div>
         """,
         unsafe_allow_html=True,
