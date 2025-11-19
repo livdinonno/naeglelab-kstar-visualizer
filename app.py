@@ -601,6 +601,5 @@ st.download_button(
 )
 
 
-except Exception as e:
-    st.info(f"Please ensure exactly two groups with ≥2 samples each. Details: {e}")
+
 
