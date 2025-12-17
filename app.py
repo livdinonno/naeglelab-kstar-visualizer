@@ -10,7 +10,7 @@ from statsmodels.stats.multitest import multipletests
 from io import BytesIO
 from PIL import Image
 
-TUTORIAL_URL = "https://docs.github.com/en/get-started/start-your-journey/hello-world"
+TUTORIAL_URL = "https://naeglelab.github.io/KSTAR/Tutorial/tutorial.html"
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
 
 st.set_page_config(page_title="KSTAR Results Plotter", layout="wide")
