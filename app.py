@@ -125,14 +125,12 @@ def compute_group_stats(df_long, group_map):
     return res
 
 def _cluster_order(matrix_df):
-    # cluster rows
     row_valid = matrix_df.fillna(matrix_df.mean(axis=1))
     try:
         row_link = linkage(row_valid.values, method="average", metric="euclidean")
         row_order = row_valid.index[leaves_list(row_link)]
     except Exception:
         row_order = matrix_df.index
-    # cluster columns
     col_valid = matrix_df.T.fillna(matrix_df.T.mean(axis=1))
     try:
         col_link = linkage(col_valid.values, method="average", metric="euclidean")
@@ -140,62 +138,6 @@ def _cluster_order(matrix_df):
     except Exception:
         col_order = matrix_df.columns
     return list(row_order), list(col_order)
-
-def fig_download_controls(fig, base_filename, key_prefix):
-    fmt = st.selectbox(
-        "Type of file to save as:",
-        [".png", ".jpg", ".pdf", ".svg", ".eps", ".tif"],
-        key=f"{key_prefix}_fmt",
-    )
-
-    # Build the downloadable payload up-front so the download button can exist on the page
-    data = None
-    file_name = None
-    mime = None
-    label = "Download"
-
-    try:
-        if fmt in [".png", ".jpg", ".svg", ".pdf"]:
-            data = pio.to_image(fig, format=fmt.replace(".", ""), scale=2)
-            file_name = f"{base_filename}{fmt}"
-            mime = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".svg": "image/svg+xml",
-                ".pdf": "application/pdf",
-            }[fmt]
-        else:
-            png = pio.to_image(fig, format="png", scale=2)
-            im = Image.open(BytesIO(png)).convert("RGB")
-            bio = BytesIO()
-            if fmt == ".tif":
-                im.save(bio, format="TIFF", compression="tiff_lzw")
-                data = bio.getvalue()
-                file_name = f"{base_filename}.tif"
-                mime = "image/tiff"
-            else:
-                im.save(bio, format="EPS")
-                data = bio.getvalue()
-                file_name = f"{base_filename}.eps"
-                mime = "application/postscript"
-    except Exception:
-        # Fallback: always let them grab an HTML version if image export fails
-        data = pio.to_html(fig, include_plotlyjs="cdn").encode("utf-8")
-        file_name = f"{base_filename}.html"
-        mime = "text/html"
-        label = "Download HTML (fallback)"
-        st.info(
-            "Image export for this format is not available in the current environment. "
-            "An HTML version of the figure was provided instead."
-        )
-
-    st.download_button(
-        label,
-        data=data,
-        file_name=file_name,
-        mime=mime,
-        key=f"{key_prefix}_download_button",
-    )
 
 # Sidebar
 with st.sidebar:
@@ -205,6 +147,10 @@ with st.sidebar:
             {
                 "title": "Phosphotyrosine Profiling Reveals New Signaling Networks (PMC Article)",
                 "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4974343/",
+            },
+            {
+                "title": "Global Phosphoproteomics Study (RSC Molecular Omics)",
+                "url": "https://pubs.rsc.org/en/content/articlelanding/2023/mo/d3mo00042g",
             },
         ]
         for pub in publications:
