@@ -495,9 +495,117 @@ else:
 
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
-# 2) Activity Heatmap
+# 2) Ranked bar plot
 st.divider()
-st.subheader("2) Activity Heatmap")
+st.subheader("2) Ranked Kinase Summary")
+st.markdown(
+    "This bar plot ranks kinases so the strongest signals are easier to prioritize. "
+    "Unlike the dot plot, which shows every kinase–sample pair, this view summarizes each kinase across samples. "
+    "You can rank by average activity, median activity, best FPR, or number of significant samples."
+)
+
+rank_metric_col1, rank_metric_col2, rank_metric_col3 = st.columns([1.2, 1, 1])
+with rank_metric_col1:
+    rank_metric = st.selectbox(
+        "Rank kinases by",
+        ["Mean Score", "Median Score", "Best FPR", "Significant Sample Count"],
+    )
+with rank_metric_col2:
+    rank_top_n = st.slider("Top N kinases", 5, max(10, merged["Kinase"].nunique()), min(20, merged["Kinase"].nunique()))
+with rank_metric_col3:
+    ranked_fpr_thr = st.number_input(
+        "Significance threshold for counts",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.05,
+        step=0.01,
+        key="ranked_fpr_thr",
+    )
+
+rank_work = merged.copy()
+rank_work["Score"] = pd.to_numeric(rank_work["Score"], errors="coerce")
+if "FPR" in rank_work.columns:
+    rank_work["FPR"] = pd.to_numeric(rank_work["FPR"], errors="coerce")
+
+ranked = (
+    rank_work.groupby("Kinase", dropna=False)
+    .agg(
+        MeanScore=("Score", "mean"),
+        MedianScore=("Score", "median"),
+        NumSamples=("Sample", "nunique"),
+    )
+    .reset_index()
+)
+
+if "FPR" in rank_work.columns and not rank_work["FPR"].isna().all():
+    fpr_summary = (
+        rank_work.groupby("Kinase", dropna=False)
+        .agg(
+            BestFPR=("FPR", "min"),
+            MedianFPR=("FPR", "median"),
+            SignificantSampleCount=("FPR", lambda x: int(np.sum(pd.to_numeric(x, errors="coerce") <= ranked_fpr_thr))),
+        )
+        .reset_index()
+    )
+    ranked = ranked.merge(fpr_summary, on="Kinase", how="left")
+else:
+    ranked["BestFPR"] = np.nan
+    ranked["MedianFPR"] = np.nan
+    ranked["SignificantSampleCount"] = 0
+
+if rank_metric == "Mean Score":
+    ranked = ranked.sort_values("MeanScore", ascending=False)
+    ranked_plot = ranked.head(rank_top_n).copy()
+    y_col = "MeanScore"
+    y_label = "Mean activity score"
+elif rank_metric == "Median Score":
+    ranked = ranked.sort_values("MedianScore", ascending=False)
+    ranked_plot = ranked.head(rank_top_n).copy()
+    y_col = "MedianScore"
+    y_label = "Median activity score"
+elif rank_metric == "Best FPR":
+    ranked_plot = ranked.dropna(subset=["BestFPR"]).copy()
+    ranked_plot = ranked_plot[ranked_plot["BestFPR"] > 0]
+    ranked_plot["NegLog10BestFPR"] = -np.log10(ranked_plot["BestFPR"].clip(lower=1e-300))
+    ranked_plot = ranked_plot.sort_values("BestFPR", ascending=True).head(rank_top_n)
+    y_col = "NegLog10BestFPR"
+    y_label = "-log10(best FPR)"
+else:
+    ranked = ranked.sort_values("SignificantSampleCount", ascending=False)
+    ranked_plot = ranked.head(rank_top_n).copy()
+    y_col = "SignificantSampleCount"
+    y_label = f"Number of samples with FPR ≤ {ranked_fpr_thr:g}"
+
+if len(ranked_plot) == 0:
+    st.info("Not enough data available to build the ranked bar plot for the selected ranking method.")
+else:
+    fig_rank = px.bar(
+        ranked_plot,
+        x="Kinase",
+        y=y_col,
+        hover_data={
+            "MeanScore": ":.4f",
+            "MedianScore": ":.4f",
+            "BestFPR": ":.4g",
+            "MedianFPR": ":.4g",
+            "SignificantSampleCount": True,
+            "NumSamples": True,
+        },
+        title=f"Top {len(ranked_plot)} kinases ranked by {rank_metric}",
+    )
+    fig_rank.update_layout(
+        margin=dict(l=40, r=20, t=60, b=120),
+        height=550,
+        xaxis_tickangle=-45,
+        yaxis_title=y_label,
+        xaxis_title="Kinase",
+    )
+    st.plotly_chart(fig_rank, use_container_width=True)
+    fig_download_controls(fig_rank, "kstar_ranked_kinase_barplot", "ranked_bar_dl")
+
+# 3) Activity Heatmap
+st.divider()
+st.subheader("3) Activity Heatmap")
 st.markdown(
     "This heatmap shows how each kinase's activity score changes across samples. "
     "For each kinase, we first compute the mean and standard deviation of its activity across samples, "
@@ -551,9 +659,9 @@ fig_hm.update_layout(margin=dict(l=140, r=20, t=30, b=40), height=900)
 st.plotly_chart(fig_hm, use_container_width=True)
 fig_download_controls(fig_hm, "kstar_activity_heatmap", "heatmap_dl")
 
-# 3) Data preview
+# 4) Data preview
 st.divider()
-st.subheader("3) Data Preview")
+st.subheader("4) Data Preview")
 st.markdown(
     "This table shows the merged long-format KSTAR output used for all plots above. "
     "Each row is a kinase–sample pair with its activity score and, if provided, FPR. "
@@ -573,9 +681,9 @@ st.download_button(
     mime="text/csv",
 )
 
-# 4) Kinase detail
+# 5) Kinase detail
 st.divider()
-st.subheader("4) Kinase Detail")
+st.subheader("5) Kinase Detail")
 st.markdown(
     "Use this section to focus on a single kinase. The plot shows that kinase's activity scores across samples. "
     "Look for samples where the score is noticeably higher or lower than the rest; those are samples where this kinase is unusually active or inactive."
