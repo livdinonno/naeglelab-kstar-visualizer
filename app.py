@@ -139,6 +139,31 @@ def _cluster_order(matrix_df):
         col_order = matrix_df.columns
     return list(row_order), list(col_order)
 
+def fig_download_controls(fig, base_filename, key_prefix):
+    col1, col2 = st.columns(2)
+
+    html_bytes = fig.to_html(include_plotlyjs="cdn").encode("utf-8")
+    col1.download_button(
+        "Download plot (HTML)",
+        data=html_bytes,
+        file_name=f"{base_filename}.html",
+        mime="text/html",
+        key=f"{key_prefix}_html",
+    )
+
+    try:
+        png_bytes = fig.to_image(format="png", scale=2)
+        col2.download_button(
+            "Download plot (PNG)",
+            data=png_bytes,
+            file_name=f"{base_filename}.png",
+            mime="image/png",
+            key=f"{key_prefix}_png",
+        )
+    except Exception:
+        col2.info("PNG export unavailable. Install kaleido to enable image downloads.")
+
+
 # Sidebar
 with st.sidebar:
     st.subheader("Background Context")
