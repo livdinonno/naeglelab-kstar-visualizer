@@ -501,10 +501,11 @@ st.subheader("2) Ranked Kinase Summary")
 st.markdown(
     "This bar plot ranks kinases so the strongest signals are easier to prioritize. "
     "Unlike the dot plot, which shows every kinase–sample pair, this view summarizes each kinase across samples. "
-    "By default, kinases are ranked by their best false positive rate (FPR), which is usually more informative than raw mean score."
+    "By default, kinases are ranked by their best false positive rate (FPR), which is usually more informative than raw mean score. "
+    "Kinases that do not meet the selected visualization threshold are listed separately below the plot."
 )
 
-rank_metric_col1, rank_metric_col2, rank_metric_col3 = st.columns([1.2, 1, 1])
+rank_metric_col1, rank_metric_col2, rank_metric_col3, rank_metric_col4 = st.columns([1.2, 1, 1, 1])
 with rank_metric_col1:
     rank_metric = st.selectbox(
         "Rank kinases by",
@@ -513,10 +514,10 @@ with rank_metric_col1:
     )
 with rank_metric_col2:
     rank_top_n = st.slider(
-        "Top N kinases",
+        "Maximum kinases to plot",
         5,
         max(10, merged["Kinase"].nunique()),
-        min(20, merged["Kinase"].nunique()),
+        min(25, merged["Kinase"].nunique()),
         key="rank_top_n",
     )
 with rank_metric_col3:
@@ -527,6 +528,14 @@ with rank_metric_col3:
         value=0.05,
         step=0.01,
         key="ranked_fpr_thr",
+    )
+with rank_metric_col4:
+    min_display_value = st.number_input(
+        "Minimum value to include in plot",
+        min_value=0.0,
+        value=0.05,
+        step=0.01,
+        key="min_display_value",
     )
 
 rank_work = merged.copy()
@@ -564,33 +573,48 @@ else:
     ranked["SignificantSampleCount"] = 0
 
 ranked["Significant"] = "Not Significant"
+excluded_kinases = pd.DataFrame()
 
 if rank_metric == "Mean Score":
     ranked = ranked.sort_values("MeanScore", ascending=False)
-    ranked_plot = ranked.head(rank_top_n).copy()
-    y_col = "MeanScore"
+    ranked["PlotValue"] = ranked["MeanScore"]
+    ranked_plot_all = ranked.copy()
+    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
+    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    y_col = "PlotValue"
     y_label = "Mean activity score"
 
 elif rank_metric == "Median Score":
     ranked = ranked.sort_values("MedianScore", ascending=False)
-    ranked_plot = ranked.head(rank_top_n).copy()
-    y_col = "MedianScore"
+    ranked["PlotValue"] = ranked["MedianScore"]
+    ranked_plot_all = ranked.copy()
+    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
+    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    y_col = "PlotValue"
     y_label = "Median activity score"
 
 elif rank_metric == "Best FPR":
-    ranked_plot = ranked.dropna(subset=["BestFPR"]).copy()
-    ranked_plot = ranked_plot[ranked_plot["BestFPR"] > 0].copy()
+    ranked_plot_all = ranked.dropna(subset=["BestFPR"]).copy()
+    ranked_plot_all = ranked_plot_all[ranked_plot_all["BestFPR"] > 0].copy()
 
-    if len(ranked_plot) > 0:
-        ranked_plot["NegLog10BestFPR"] = -np.log10(
-            ranked_plot["BestFPR"].clip(lower=1e-300)
+    if len(ranked_plot_all) > 0:
+        ranked_plot_all["NegLog10BestFPR"] = -np.log10(
+            ranked_plot_all["BestFPR"].clip(lower=1e-300)
         )
-        ranked_plot["Significant"] = np.where(
-            ranked_plot["BestFPR"] <= ranked_fpr_thr,
+        ranked_plot_all["Significant"] = np.where(
+            ranked_plot_all["BestFPR"] <= ranked_fpr_thr,
             "Significant",
             "Not Significant",
         )
-        ranked_plot = ranked_plot.sort_values("BestFPR", ascending=True).head(rank_top_n)
+        ranked_plot_all = ranked_plot_all.sort_values("BestFPR", ascending=True)
+
+    ranked_plot = ranked_plot_all[
+        ranked_plot_all["NegLog10BestFPR"] >= min_display_value
+    ].head(rank_top_n).copy()
+
+    excluded_kinases = ranked_plot_all[
+        ranked_plot_all["NegLog10BestFPR"] < min_display_value
+    ].copy()
 
     y_col = "NegLog10BestFPR"
     y_label = "-log10(best FPR)"
@@ -600,17 +624,20 @@ else:
         ["SignificantSampleCount", "BestFPR"],
         ascending=[False, True],
     )
-    ranked_plot = ranked.head(rank_top_n).copy()
-    ranked_plot["Significant"] = np.where(
-        ranked_plot["SignificantSampleCount"] > 0,
+    ranked["PlotValue"] = ranked["SignificantSampleCount"]
+    ranked_plot_all = ranked.copy()
+    ranked_plot_all["Significant"] = np.where(
+        ranked_plot_all["SignificantSampleCount"] > 0,
         "Significant",
         "Not Significant",
     )
-    y_col = "SignificantSampleCount"
+    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
+    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    y_col = "PlotValue"
     y_label = f"Number of samples with FPR ≤ {ranked_fpr_thr:g}"
 
 if len(ranked_plot) == 0:
-    st.info("Not enough data available to build the ranked bar plot for the selected ranking method.")
+    st.info("No kinases met the current visualization threshold for the selected ranking method.")
 else:
     fig_rank = px.bar(
         ranked_plot,
@@ -638,9 +665,10 @@ else:
             y=-np.log10(max(ranked_fpr_thr, 1e-300)),
             line_dash="dash",
             annotation_text="Significance threshold",
-            annotation_position="top left",
+            annotation_position="top right",
         )
 
+    y_max = ranked_plot[y_col].max()
     fig_rank.update_layout(
         margin=dict(l=40, r=20, t=60, b=120),
         height=550,
@@ -648,10 +676,16 @@ else:
         yaxis_title=y_label,
         xaxis_title="Kinase",
         legend_title_text="",
+        yaxis_range=[0, y_max * 1.08 if pd.notna(y_max) and y_max > 0 else 1],
     )
 
     st.plotly_chart(fig_rank, use_container_width=True)
     fig_download_controls(fig_rank, "kstar_ranked_kinase_barplot", "ranked_bar_dl")
+
+if len(excluded_kinases) > 0:
+    excluded_names = excluded_kinases["Kinase"].dropna().astype(str).tolist()
+    with st.expander(f"Kinases not meeting the selected visualization threshold ({len(excluded_names)})", expanded=False):
+        st.markdown(", ".join(excluded_names))
 
 # 3) Activity Heatmap
 st.divider()
