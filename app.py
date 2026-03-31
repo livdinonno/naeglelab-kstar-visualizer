@@ -501,17 +501,24 @@ st.subheader("2) Ranked Kinase Summary")
 st.markdown(
     "This bar plot ranks kinases so the strongest signals are easier to prioritize. "
     "Unlike the dot plot, which shows every kinase–sample pair, this view summarizes each kinase across samples. "
-    "You can rank by average activity, median activity, best FPR, or number of significant samples."
+    "By default, kinases are ranked by their best false positive rate (FPR), which is usually more informative than raw mean score."
 )
 
 rank_metric_col1, rank_metric_col2, rank_metric_col3 = st.columns([1.2, 1, 1])
 with rank_metric_col1:
     rank_metric = st.selectbox(
         "Rank kinases by",
-        ["Mean Score", "Median Score", "Best FPR", "Significant Sample Count"],
+        ["Best FPR", "Significant Sample Count", "Mean Score", "Median Score"],
+        index=0,
     )
 with rank_metric_col2:
-    rank_top_n = st.slider("Top N kinases", 5, max(10, merged["Kinase"].nunique()), min(20, merged["Kinase"].nunique()))
+    rank_top_n = st.slider(
+        "Top N kinases",
+        5,
+        max(10, merged["Kinase"].nunique()),
+        min(20, merged["Kinase"].nunique()),
+        key="rank_top_n",
+    )
 with rank_metric_col3:
     ranked_fpr_thr = st.number_input(
         "Significance threshold for counts",
@@ -543,7 +550,10 @@ if "FPR" in rank_work.columns and not rank_work["FPR"].isna().all():
         .agg(
             BestFPR=("FPR", "min"),
             MedianFPR=("FPR", "median"),
-            SignificantSampleCount=("FPR", lambda x: int(np.sum(pd.to_numeric(x, errors="coerce") <= ranked_fpr_thr))),
+            SignificantSampleCount=(
+                "FPR",
+                lambda x: int(np.sum(pd.to_numeric(x, errors="coerce") <= ranked_fpr_thr)),
+            ),
         )
         .reset_index()
     )
@@ -553,26 +563,49 @@ else:
     ranked["MedianFPR"] = np.nan
     ranked["SignificantSampleCount"] = 0
 
+ranked["Significant"] = "Not Significant"
+
 if rank_metric == "Mean Score":
     ranked = ranked.sort_values("MeanScore", ascending=False)
     ranked_plot = ranked.head(rank_top_n).copy()
     y_col = "MeanScore"
     y_label = "Mean activity score"
+
 elif rank_metric == "Median Score":
     ranked = ranked.sort_values("MedianScore", ascending=False)
     ranked_plot = ranked.head(rank_top_n).copy()
     y_col = "MedianScore"
     y_label = "Median activity score"
+
 elif rank_metric == "Best FPR":
     ranked_plot = ranked.dropna(subset=["BestFPR"]).copy()
-    ranked_plot = ranked_plot[ranked_plot["BestFPR"] > 0]
-    ranked_plot["NegLog10BestFPR"] = -np.log10(ranked_plot["BestFPR"].clip(lower=1e-300))
-    ranked_plot = ranked_plot.sort_values("BestFPR", ascending=True).head(rank_top_n)
+    ranked_plot = ranked_plot[ranked_plot["BestFPR"] > 0].copy()
+
+    if len(ranked_plot) > 0:
+        ranked_plot["NegLog10BestFPR"] = -np.log10(
+            ranked_plot["BestFPR"].clip(lower=1e-300)
+        )
+        ranked_plot["Significant"] = np.where(
+            ranked_plot["BestFPR"] <= ranked_fpr_thr,
+            "Significant",
+            "Not Significant",
+        )
+        ranked_plot = ranked_plot.sort_values("BestFPR", ascending=True).head(rank_top_n)
+
     y_col = "NegLog10BestFPR"
     y_label = "-log10(best FPR)"
+
 else:
-    ranked = ranked.sort_values("SignificantSampleCount", ascending=False)
+    ranked = ranked.sort_values(
+        ["SignificantSampleCount", "BestFPR"],
+        ascending=[False, True],
+    )
     ranked_plot = ranked.head(rank_top_n).copy()
+    ranked_plot["Significant"] = np.where(
+        ranked_plot["SignificantSampleCount"] > 0,
+        "Significant",
+        "Not Significant",
+    )
     y_col = "SignificantSampleCount"
     y_label = f"Number of samples with FPR ≤ {ranked_fpr_thr:g}"
 
@@ -583,6 +616,11 @@ else:
         ranked_plot,
         x="Kinase",
         y=y_col,
+        color="Significant",
+        color_discrete_map={
+            "Significant": "#d62728",
+            "Not Significant": "#bdbdbd",
+        },
         hover_data={
             "MeanScore": ":.4f",
             "MedianScore": ":.4f",
@@ -590,16 +628,28 @@ else:
             "MedianFPR": ":.4g",
             "SignificantSampleCount": True,
             "NumSamples": True,
+            "Significant": False,
         },
         title=f"Top {len(ranked_plot)} kinases ranked by {rank_metric}",
     )
+
+    if rank_metric == "Best FPR":
+        fig_rank.add_hline(
+            y=-np.log10(max(ranked_fpr_thr, 1e-300)),
+            line_dash="dash",
+            annotation_text="Significance threshold",
+            annotation_position="top left",
+        )
+
     fig_rank.update_layout(
         margin=dict(l=40, r=20, t=60, b=120),
         height=550,
         xaxis_tickangle=-45,
         yaxis_title=y_label,
         xaxis_title="Kinase",
+        legend_title_text="",
     )
+
     st.plotly_chart(fig_rank, use_container_width=True)
     fig_download_controls(fig_rank, "kstar_ranked_kinase_barplot", "ranked_bar_dl")
 
