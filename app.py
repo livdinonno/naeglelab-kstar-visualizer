@@ -212,10 +212,42 @@ if not file_activity:
 # Read and merge
 act_raw = pd.read_csv(file_activity, sep="\t")
 activity = coerce_activity(act_raw)
+
+activity["Sample"] = activity["Sample"].astype(str).str.strip()
+activity["Kinase"] = activity["Kinase"].astype(str).str.strip()
+
 merged = activity.copy()
 if file_fpr is not None:
     fpr_raw = pd.read_csv(file_fpr, sep="\t")
     fpr = coerce_fpr(fpr_raw)
+
+    fpr["Sample"] = fpr["Sample"].astype(str).str.strip()
+    fpr["Kinase"] = fpr["Kinase"].astype(str).str.strip()
+
+    activity_samples = sorted(activity["Sample"].dropna().unique())
+    fpr_samples = sorted(fpr["Sample"].dropna().unique())
+
+    missing_in_fpr = [s for s in activity_samples if s not in fpr_samples]
+    missing_in_activity = [s for s in fpr_samples if s not in activity_samples]
+
+    if len(missing_in_fpr) > 0 or len(missing_in_activity) > 0:
+        st.warning("Sample mismatch between activities and FPR files.")
+        if len(missing_in_fpr) > 0:
+            st.write("Present in activities but missing in FPR:")
+            st.write(missing_in_fpr)
+        if len(missing_in_activity) > 0:
+            st.write("Present in FPR but missing in activities:")
+            st.write(missing_in_activity)
+
+    shared_samples = [s for s in activity_samples if s in fpr_samples]
+
+    if len(shared_samples) == 0:
+        st.error("No overlapping samples were found between the activities and FPR files. Make sure both files come from the same KSTAR run.")
+        st.stop()
+
+    activity = activity[activity["Sample"].isin(shared_samples)].copy()
+    fpr = fpr[fpr["Sample"].isin(shared_samples)].copy()
+
     merged = pd.merge(activity, fpr, on=["Kinase", "Sample"], how="left")
 
 # 1) Dot plot
@@ -541,4 +573,3 @@ st.download_button(
     file_name=f"{sel_kinase}_rows.csv",
     mime="text/csv",
 )
-
