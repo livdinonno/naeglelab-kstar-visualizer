@@ -497,45 +497,29 @@ else:
 
 # 2) Ranked bar plot
 st.divider()
-st.subheader("2) Ranked Kinase Summary")
+st.subheader("2) Ranked Inferred Kinase Activity Summary")
 st.markdown(
-    "This bar plot ranks kinases so the strongest signals are easier to prioritize. "
-    "Unlike the dot plot, which shows every kinase–sample pair, this view summarizes each kinase across samples. "
-    "By default, kinases are ranked by their best false positive rate (FPR), which is usually more informative than raw mean score. "
-    "Kinases that do not meet the selected visualization threshold are listed separately below the plot."
+    "This bar plot ranks inferred kinase activities so the strongest signals are easier to prioritize. "
+    "Unlike the dot plot, which shows every kinase–sample pair, this view summarizes each inferred kinase activity across samples. "
+    "By default, activities are ranked by their best false positive rate (FPR), which is usually more informative than raw mean score. "
+    "Entries with no nonzero signal under the selected ranking method are listed separately below the plot."
 )
 
-rank_metric_col1, rank_metric_col2, rank_metric_col3, rank_metric_col4 = st.columns([1.2, 1, 1, 1])
+rank_metric_col1, rank_metric_col2 = st.columns([1.2, 1])
 with rank_metric_col1:
     rank_metric = st.selectbox(
-        "Rank kinases by",
+        "Rank inferred kinase activities by",
         ["Best FPR", "Significant Sample Count", "Mean Score", "Median Score"],
         index=0,
     )
 with rank_metric_col2:
-    rank_top_n = st.slider(
-        "Maximum kinases to plot",
-        5,
-        max(10, merged["Kinase"].nunique()),
-        min(25, merged["Kinase"].nunique()),
-        key="rank_top_n",
-    )
-with rank_metric_col3:
     ranked_fpr_thr = st.number_input(
-        "Significance threshold for counts",
+        "Significance threshold",
         min_value=0.0,
         max_value=1.0,
         value=0.05,
         step=0.01,
         key="ranked_fpr_thr",
-    )
-with rank_metric_col4:
-    min_display_value = st.number_input(
-        "Minimum value to include in plot",
-        min_value=0.0,
-        value=0.05,
-        step=0.01,
-        key="min_display_value",
     )
 
 rank_work = merged.copy()
@@ -572,81 +556,93 @@ else:
     ranked["MedianFPR"] = np.nan
     ranked["SignificantSampleCount"] = 0
 
-ranked["Significant"] = "Not Significant"
-excluded_kinases = pd.DataFrame()
+ranked["PriorityGroup"] = "Below selected threshold"
+zero_signal_entries = pd.DataFrame()
 
 if rank_metric == "Mean Score":
-    ranked = ranked.sort_values("MeanScore", ascending=False)
-    ranked["PlotValue"] = ranked["MeanScore"]
-    ranked_plot_all = ranked.copy()
-    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
-    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    ranked["PlotValue"] = pd.to_numeric(ranked["MeanScore"], errors="coerce")
+    ranked = ranked.sort_values("PlotValue", ascending=False)
+    ranked["PriorityGroup"] = np.where(
+        ranked["PlotValue"] > 0,
+        "Has nonzero mean score",
+        "No measurable mean score",
+    )
+    ranked_plot = ranked[ranked["PlotValue"] > 0].copy()
+    zero_signal_entries = ranked[ranked["PlotValue"] <= 0].copy()
+    x_col = "Kinase"
     y_col = "PlotValue"
-    y_label = "Mean activity score"
+    y_label = "Mean inferred kinase activity score"
+    plot_title = f"All inferred kinase activities with nonzero mean score"
 
 elif rank_metric == "Median Score":
-    ranked = ranked.sort_values("MedianScore", ascending=False)
-    ranked["PlotValue"] = ranked["MedianScore"]
-    ranked_plot_all = ranked.copy()
-    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
-    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    ranked["PlotValue"] = pd.to_numeric(ranked["MedianScore"], errors="coerce")
+    ranked = ranked.sort_values("PlotValue", ascending=False)
+    ranked["PriorityGroup"] = np.where(
+        ranked["PlotValue"] > 0,
+        "Has nonzero median score",
+        "No measurable median score",
+    )
+    ranked_plot = ranked[ranked["PlotValue"] > 0].copy()
+    zero_signal_entries = ranked[ranked["PlotValue"] <= 0].copy()
+    x_col = "Kinase"
     y_col = "PlotValue"
-    y_label = "Median activity score"
+    y_label = "Median inferred kinase activity score"
+    plot_title = f"All inferred kinase activities with nonzero median score"
 
 elif rank_metric == "Best FPR":
-    ranked_plot_all = ranked.dropna(subset=["BestFPR"]).copy()
-    ranked_plot_all = ranked_plot_all[ranked_plot_all["BestFPR"] > 0].copy()
+    ranked_plot = ranked.dropna(subset=["BestFPR"]).copy()
+    ranked_plot = ranked_plot[ranked_plot["BestFPR"] > 0].copy()
 
-    if len(ranked_plot_all) > 0:
-        ranked_plot_all["NegLog10BestFPR"] = -np.log10(
-            ranked_plot_all["BestFPR"].clip(lower=1e-300)
+    if len(ranked_plot) > 0:
+        ranked_plot["PlotValue"] = -np.log10(
+            ranked_plot["BestFPR"].clip(lower=1e-300)
         )
-        ranked_plot_all["Significant"] = np.where(
-            ranked_plot_all["BestFPR"] <= ranked_fpr_thr,
-            "Significant",
-            "Not Significant",
+        ranked_plot["PriorityGroup"] = np.where(
+            ranked_plot["BestFPR"] <= ranked_fpr_thr,
+            "Meets significance threshold",
+            "Does not meet significance threshold",
         )
-        ranked_plot_all = ranked_plot_all.sort_values("BestFPR", ascending=True)
+        ranked_plot = ranked_plot.sort_values("BestFPR", ascending=True)
 
-    ranked_plot = ranked_plot_all[
-        ranked_plot_all["NegLog10BestFPR"] >= min_display_value
-    ].head(rank_top_n).copy()
-
-    excluded_kinases = ranked_plot_all[
-        ranked_plot_all["NegLog10BestFPR"] < min_display_value
+    zero_signal_entries = ranked[
+        ranked["BestFPR"].isna() | (pd.to_numeric(ranked["BestFPR"], errors="coerce") <= 0)
     ].copy()
 
-    y_col = "NegLog10BestFPR"
-    y_label = "-log10(best FPR)"
+    x_col = "Kinase"
+    y_col = "PlotValue"
+    y_label = "-log10(best FPR) for inferred kinase activity"
+    plot_title = "All inferred kinase activities with valid best FPR"
 
 else:
-    ranked = ranked.sort_values(
-        ["SignificantSampleCount", "BestFPR"],
-        ascending=[False, True],
+    ranked["PlotValue"] = pd.to_numeric(ranked["SignificantSampleCount"], errors="coerce")
+    ranked = ranked.sort_values(["PlotValue", "BestFPR"], ascending=[False, True])
+    ranked["PriorityGroup"] = np.where(
+        ranked["PlotValue"] > 0,
+        "At least one significant sample",
+        "No significant samples",
     )
-    ranked["PlotValue"] = ranked["SignificantSampleCount"]
-    ranked_plot_all = ranked.copy()
-    ranked_plot_all["Significant"] = np.where(
-        ranked_plot_all["SignificantSampleCount"] > 0,
-        "Significant",
-        "Not Significant",
-    )
-    ranked_plot = ranked_plot_all[ranked_plot_all["PlotValue"] >= min_display_value].head(rank_top_n).copy()
-    excluded_kinases = ranked_plot_all[ranked_plot_all["PlotValue"] < min_display_value].copy()
+    ranked_plot = ranked[ranked["PlotValue"] > 0].copy()
+    zero_signal_entries = ranked[ranked["PlotValue"] <= 0].copy()
+    x_col = "Kinase"
     y_col = "PlotValue"
-    y_label = f"Number of samples with FPR ≤ {ranked_fpr_thr:g}"
+    y_label = f"Number of samples with inferred kinase activity FPR ≤ {ranked_fpr_thr:g}"
+    plot_title = "All inferred kinase activities with at least one significant sample"
 
 if len(ranked_plot) == 0:
-    st.info("No kinases met the current visualization threshold for the selected ranking method.")
+    st.info("No inferred kinase activities had a nonzero plotted value for the selected ranking method.")
 else:
     fig_rank = px.bar(
         ranked_plot,
-        x="Kinase",
+        x=x_col,
         y=y_col,
-        color="Significant",
+        color="PriorityGroup",
         color_discrete_map={
-            "Significant": "#d62728",
-            "Not Significant": "#bdbdbd",
+            "Meets significance threshold": "#d62728",
+            "Does not meet significance threshold": "#bdbdbd",
+            "Has nonzero mean score": "#4c78a8",
+            "Has nonzero median score": "#4c78a8",
+            "At least one significant sample": "#d62728",
+            "No significant samples": "#bdbdbd",
         },
         hover_data={
             "MeanScore": ":.4f",
@@ -655,37 +651,64 @@ else:
             "MedianFPR": ":.4g",
             "SignificantSampleCount": True,
             "NumSamples": True,
-            "Significant": False,
+            "PriorityGroup": False,
         },
-        title=f"Top {len(ranked_plot)} kinases ranked by {rank_metric}",
+        title=plot_title,
     )
 
     if rank_metric == "Best FPR":
         fig_rank.add_hline(
             y=-np.log10(max(ranked_fpr_thr, 1e-300)),
             line_dash="dash",
-            annotation_text="Significance threshold",
+            annotation_text="Selected significance threshold",
             annotation_position="top right",
         )
 
-    y_max = ranked_plot[y_col].max()
+    y_max = pd.to_numeric(ranked_plot[y_col], errors="coerce").max()
+    if pd.isna(y_max) or y_max <= 0:
+        y_max = 1
+
     fig_rank.update_layout(
-        margin=dict(l=40, r=20, t=60, b=120),
-        height=550,
+        margin=dict(l=40, r=20, t=60, b=140),
+        height=600,
         xaxis_tickangle=-45,
         yaxis_title=y_label,
-        xaxis_title="Kinase",
+        xaxis_title="Inferred kinase activity target",
         legend_title_text="",
-        yaxis_range=[0, y_max * 1.08 if pd.notna(y_max) and y_max > 0 else 1],
+        yaxis_range=[0, y_max * 1.08],
     )
 
     st.plotly_chart(fig_rank, use_container_width=True)
-    fig_download_controls(fig_rank, "kstar_ranked_kinase_barplot", "ranked_bar_dl")
+    fig_download_controls(fig_rank, "kstar_ranked_inferred_kinase_activity_barplot", "ranked_bar_dl")
 
-if len(excluded_kinases) > 0:
-    excluded_names = excluded_kinases["Kinase"].dropna().astype(str).tolist()
-    with st.expander(f"Kinases not meeting the selected visualization threshold ({len(excluded_names)})", expanded=False):
-        st.markdown(", ".join(excluded_names))
+if len(zero_signal_entries) > 0:
+    zero_names = zero_signal_entries["Kinase"].dropna().astype(str).tolist()
+
+    if rank_metric == "Best FPR":
+        zero_title = f"Inferred kinase activities with no valid best FPR to plot ({len(zero_names)})"
+        zero_text = (
+            "These inferred kinase activities did not have a valid positive best FPR value available for plotting "
+            "under the current settings."
+        )
+    elif rank_metric == "Significant Sample Count":
+        zero_title = f"Inferred kinase activities with no significant samples ({len(zero_names)})"
+        zero_text = (
+            "These inferred kinase activities had zero samples meeting the selected significance threshold."
+        )
+    elif rank_metric == "Mean Score":
+        zero_title = f"Inferred kinase activities with no nonzero mean score ({len(zero_names)})"
+        zero_text = (
+            "These inferred kinase activities had mean scores of zero or missing values under the current settings."
+        )
+    else:
+        zero_title = f"Inferred kinase activities with no nonzero median score ({len(zero_names)})"
+        zero_text = (
+            "These inferred kinase activities had median scores of zero or missing values under the current settings."
+        )
+
+    with st.expander(zero_title, expanded=False):
+        st.markdown(zero_text)
+        st.markdown(", ".join(zero_names))
 
 # 3) Activity Heatmap
 st.divider()
