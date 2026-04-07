@@ -9,6 +9,8 @@ from scipy.cluster.hierarchy import linkage, leaves_list
 from statsmodels.stats.multitest import multipletests
 from io import BytesIO
 from PIL import Image
+import os
+import re
 
 TUTORIAL_URL = "https://naeglelab.github.io/KSTAR/Tutorial/tutorial.html"
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
@@ -163,6 +165,109 @@ def fig_download_controls(fig, base_filename, key_prefix):
     except Exception:
         col2.info("PNG export unavailable. Install kaleido to enable image downloads.")
 
+# Multi-file helpers
+def _detect_uploaded_kind(filename):
+    name = os.path.basename(str(filename)).lower()
+    if "activity" in name or "activities" in name:
+        return "activity"
+    if "fpr" in name:
+        return "fpr"
+    return None
+
+def _extract_split_number(filename):
+    name = os.path.basename(str(filename)).lower()
+    patterns = [
+        r"split[_\-]?(\d+)",
+        r"[_\-](\d+)(?:\.[a-z0-9]+)?$",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, name)
+        if m:
+            return int(m.group(1))
+    return 10**9
+
+def _read_uploaded_tsv(uploaded_file):
+    uploaded_file.seek(0)
+    return pd.read_csv(uploaded_file, sep="\t")
+
+def _merge_uploaded_wide_files(file_list, label):
+    if file_list is None or len(file_list) == 0:
+        return None
+
+    sorted_files = sorted(file_list, key=lambda f: _extract_split_number(f.name))
+    dfs = []
+    seen_cols = set()
+
+    for f in sorted_files:
+        df = _read_uploaded_tsv(f)
+
+        if df.shape[1] == 0:
+            st.warning(f"{label}: {f.name} appears empty and was skipped.")
+            continue
+
+        first = df.columns[0]
+        df = df.rename(columns={first: "Kinase"}).copy()
+        df["Kinase"] = df["Kinase"].astype(str).str.strip()
+
+        if df["Kinase"].duplicated().any():
+            df = df.groupby("Kinase", as_index=False).first()
+
+        keep_cols = ["Kinase"]
+        dropped_cols = []
+
+        for c in df.columns[1:]:
+            if c not in seen_cols:
+                keep_cols.append(c)
+                seen_cols.add(c)
+            else:
+                dropped_cols.append(c)
+
+        if len(dropped_cols) > 0:
+            st.warning(
+                f"{label}: duplicate sample columns were skipped from {f.name}: "
+                + ", ".join(dropped_cols[:10])
+                + (" ..." if len(dropped_cols) > 10 else "")
+            )
+
+        df = df[keep_cols].copy()
+        dfs.append(df)
+
+    if len(dfs) == 0:
+        return None
+
+    if len(dfs) == 1:
+        return dfs[0]
+
+    merged = dfs[0]
+    for d in dfs[1:]:
+        merged = pd.merge(merged, d, on="Kinase", how="outer")
+
+    return merged
+
+def _prepare_uploaded_input(file_input, label, expected_kind=None):
+    if not file_input:
+        return None
+
+    files = file_input if isinstance(file_input, list) else [file_input]
+
+    if expected_kind is not None:
+        detected = []
+        for f in files:
+            kind = _detect_uploaded_kind(f.name)
+            if kind is None:
+                detected.append(f)
+            elif kind == expected_kind:
+                detected.append(f)
+            else:
+                st.warning(
+                    f"{label}: skipped {f.name} because it looks like a {kind} file, not {expected_kind}."
+                )
+        files = detected
+
+    if len(files) == 0:
+        return None
+
+    return _merge_uploaded_wide_files(files, label)
 
 # Sidebar
 with st.sidebar:
@@ -215,6 +320,7 @@ with colA:
         type=["tsv"],
         key="file1_main",
         label_visibility="collapsed",
+        accept_multiple_files=True,
     )
 with colB:
     st.markdown(
@@ -226,6 +332,7 @@ with colB:
         type=["tsv"],
         key="file2_main",
         label_visibility="collapsed",
+        accept_multiple_files=True,
     )
 
 if not file_activity:
@@ -235,7 +342,11 @@ if not file_activity:
     st.stop()
 
 # Read and merge
-act_raw = pd.read_csv(file_activity, sep="\t")
+act_raw = _prepare_uploaded_input(file_activity, "Activities", expected_kind="activity")
+if act_raw is None:
+    st.error("No valid activity files were uploaded.")
+    st.stop()
+
 activity = coerce_activity(act_raw)
 
 activity["Sample"] = activity["Sample"].astype(str).str.strip()
@@ -243,37 +354,41 @@ activity["Kinase"] = activity["Kinase"].astype(str).str.strip()
 
 merged = activity.copy()
 if file_fpr is not None:
-    fpr_raw = pd.read_csv(file_fpr, sep="\t")
-    fpr = coerce_fpr(fpr_raw)
+    fpr_raw = _prepare_uploaded_input(file_fpr, "FPR", expected_kind="fpr")
 
-    fpr["Sample"] = fpr["Sample"].astype(str).str.strip()
-    fpr["Kinase"] = fpr["Kinase"].astype(str).str.strip()
+    if fpr_raw is None:
+        st.warning("No valid FPR files were uploaded. Continuing with activities only.")
+    else:
+        fpr = coerce_fpr(fpr_raw)
 
-    activity_samples = sorted(activity["Sample"].dropna().unique())
-    fpr_samples = sorted(fpr["Sample"].dropna().unique())
+        fpr["Sample"] = fpr["Sample"].astype(str).str.strip()
+        fpr["Kinase"] = fpr["Kinase"].astype(str).str.strip()
 
-    missing_in_fpr = [s for s in activity_samples if s not in fpr_samples]
-    missing_in_activity = [s for s in fpr_samples if s not in activity_samples]
+        activity_samples = sorted(activity["Sample"].dropna().unique())
+        fpr_samples = sorted(fpr["Sample"].dropna().unique())
 
-    if len(missing_in_fpr) > 0 or len(missing_in_activity) > 0:
-        st.warning("Sample mismatch between activities and FPR files.")
-        if len(missing_in_fpr) > 0:
-            st.write("Present in activities but missing in FPR:")
-            st.write(missing_in_fpr)
-        if len(missing_in_activity) > 0:
-            st.write("Present in FPR but missing in activities:")
-            st.write(missing_in_activity)
+        missing_in_fpr = [s for s in activity_samples if s not in fpr_samples]
+        missing_in_activity = [s for s in fpr_samples if s not in activity_samples]
 
-    shared_samples = [s for s in activity_samples if s in fpr_samples]
+        if len(missing_in_fpr) > 0 or len(missing_in_activity) > 0:
+            st.warning("Sample mismatch between activities and FPR files.")
+            if len(missing_in_fpr) > 0:
+                st.write("Present in activities but missing in FPR:")
+                st.write(missing_in_fpr)
+            if len(missing_in_activity) > 0:
+                st.write("Present in FPR but missing in activities:")
+                st.write(missing_in_activity)
 
-    if len(shared_samples) == 0:
-        st.error("No overlapping samples were found between the activities and FPR files. Make sure both files come from the same KSTAR run.")
-        st.stop()
+        shared_samples = [s for s in activity_samples if s in fpr_samples]
 
-    activity = activity[activity["Sample"].isin(shared_samples)].copy()
-    fpr = fpr[fpr["Sample"].isin(shared_samples)].copy()
+        if len(shared_samples) == 0:
+            st.error("No overlapping samples were found between the activities and FPR files. Make sure both files come from the same KSTAR run.")
+            st.stop()
 
-    merged = pd.merge(activity, fpr, on=["Kinase", "Sample"], how="left")
+        activity = activity[activity["Sample"].isin(shared_samples)].copy()
+        fpr = fpr[fpr["Sample"].isin(shared_samples)].copy()
+
+        merged = pd.merge(activity, fpr, on=["Kinase", "Sample"], how="left")
 
 # 1) Dot plot
 st.divider()
@@ -312,7 +427,6 @@ else:
             horizontal=True,
         )
 
-    # how many kinases total
     total_kinases = merged["Kinase"].nunique()
     st.caption(f"Total kinases detected in activity file: {total_kinases}")
 
@@ -338,17 +452,14 @@ else:
     working = dot.copy()
     conf_score = -np.log10(working["FPR"])
     if topn_conf > 0 and len(working) > topn_conf:
-        # keep top N lowest-FPR pairs (highest confidence)
         working = working.iloc[np.argsort(-conf_score)[:topn_conf]]
 
     file_k_order = list(pd.Index(merged["Kinase"]).drop_duplicates())
     file_s_order = list(pd.Index(merged["Sample"]).drop_duplicates())
 
-    # default orders
     y_order = file_k_order
     x_order = file_s_order
 
-    # mean activity for ordering
     mean_activity = (
         merged.groupby("Kinase")["Score"]
         .mean()
@@ -381,17 +492,15 @@ else:
             r_order, c_order = _cluster_order(pivot)
             y_order, x_order = r_order, c_order
 
-    # sizes + colors (smaller than before to reduce overlap)
     nl = (-np.log10(working["FPR"])).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     bins = [0, 1, 2, 3, np.inf]
-    labels = [6, 10, 14, 18]  # smaller dots → less visual pile-up
+    labels = [6, 10, 14, 18]
     idx = np.digitize(nl, bins) - 1
     size_vals = np.array(labels)[np.clip(idx, 0, len(labels) - 1)]
     colors = np.where(working["Significant"] == "Sig", "#d62728", "#d3d3d3")
 
     fig_dot = go.Figure()
 
-    # invisible dummy trace to force all kinases onto the axis
     if len(x_order) > 0:
         fig_dot.add_trace(
             go.Scatter(
@@ -404,7 +513,6 @@ else:
             )
         )
 
-    # real data points
     fig_dot.add_trace(
         go.Scatter(
             x=working["Sample"],
@@ -425,7 +533,6 @@ else:
         )
     )
 
-    # legend entries for significance
     fig_dot.add_trace(
         go.Scatter(
             x=[None],
@@ -447,7 +554,6 @@ else:
         )
     )
 
-    # dynamic height to space kinases more clearly
     plot_height = min(1600, max(800, 22 * len(y_order) + 220))
 
     fig_dot.update_layout(
@@ -734,7 +840,6 @@ if cluster_heatmap and mat.shape[0] >= 3 and mat.shape[1] >= 2:
             f"Clustering failed for this dataset, showing unclustered heatmap instead. Details: {e}"
         )
 
-# z-score per kinase
 means = mat.mean(axis=1, skipna=True).values.reshape(-1, 1)
 stds = mat.std(axis=1, ddof=1, skipna=True).replace(0, np.nan).values.reshape(-1, 1)
 zmat = (mat - means) / stds
