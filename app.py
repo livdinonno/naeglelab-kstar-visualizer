@@ -206,11 +206,15 @@ def _normalize_match_key(filename):
     stem = os.path.splitext(name)[0]
 
     stem = re.sub(r"false[_\-\s]*positive[_\-\s]*rate", "", stem)
-
     stem = re.sub(r"[_\-\s]+", "_", stem).strip("_")
 
-    stem = re.sub(r"(?:^|_)(activities|activity|fpr)(?:_\d+)?$", "", stem)
-    stem = re.sub(r"(?:^|_)(activities|activity|fpr)(?:$)", "", stem)
+    stem = re.sub(r"_activities_(\d+)$", r"_\1", stem)
+    stem = re.sub(r"_activity_(\d+)$", r"_\1", stem)
+    stem = re.sub(r"_fpr_(\d+)$", r"_\1", stem)
+
+    stem = re.sub(r"_activities$", "", stem)
+    stem = re.sub(r"_activity$", "", stem)
+    stem = re.sub(r"_fpr$", "", stem)
 
     stem = re.sub(r"_+", "_", stem).strip("_")
 
@@ -221,13 +225,6 @@ def _find_duplicate_content(files):
     for f in files:
         file_hash = _get_uploaded_file_hash(f)
         groups.setdefault(file_hash, []).append(f.name)
-    return {k: v for k, v in groups.items() if len(v) > 1}
-
-def _find_duplicate_match_keys(files):
-    groups = {}
-    for f in files:
-        key = _normalize_match_key(f.name)
-        groups.setdefault(key, []).append(f.name)
     return {k: v for k, v in groups.items() if len(v) > 1}
 
 def _summarize_upload_alignment(activity_files, fpr_files):
@@ -252,8 +249,6 @@ def _summarize_upload_alignment(activity_files, fpr_files):
         "missing_activity": missing_activity,
         "activity_duplicate_content": _find_duplicate_content(activity_files),
         "fpr_duplicate_content": _find_duplicate_content(fpr_files),
-        "activity_duplicate_keys": _find_duplicate_match_keys(activity_files),
-        "fpr_duplicate_keys": _find_duplicate_match_keys(fpr_files),
     }
 
 def _deduplicate_uploaded_files(files, label):
@@ -439,26 +434,6 @@ if file_activity or file_fpr:
     if len(upload_summary["fpr_duplicate_content"]) > 0:
         st.warning("True duplicate FPR files detected based on identical file contents.")
         for _, names in upload_summary["fpr_duplicate_content"].items():
-            st.write(names)
-
-    activity_dup_keys = {
-        k: v for k, v in upload_summary["activity_duplicate_keys"].items()
-        if len(v) > 1
-    }
-    if len(activity_dup_keys) > 0:
-        st.warning("Multiple activity files appear to map to the same inferred match group.")
-        for key, names in activity_dup_keys.items():
-            st.write(f"- Match key `{key}`:")
-            st.write(names)
-
-    fpr_dup_keys = {
-        k: v for k, v in upload_summary["fpr_duplicate_keys"].items()
-        if len(v) > 1
-    }
-    if len(fpr_dup_keys) > 0:
-        st.warning("Multiple FPR files appear to map to the same inferred match group.")
-        for key, names in fpr_dup_keys.items():
-            st.write(f"- Match key `{key}`:")
             st.write(names)
 
     if len(upload_summary["missing_fpr"]) > 0:
