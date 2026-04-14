@@ -190,6 +190,87 @@ def _read_uploaded_tsv(uploaded_file):
     uploaded_file.seek(0)
     return pd.read_csv(uploaded_file, sep="\t")
 
+def _normalize_match_key(filename):
+    name = os.path.basename(str(filename)).lower()
+    stem = os.path.splitext(name)[0]
+
+    stem = re.sub(r"false[_\-\s]*positive[_\-\s]*rate", " ", stem)
+    stem = re.sub(r"\bfpr\b", " ", stem)
+    stem = re.sub(r"\bactivities\b", " ", stem)
+    stem = re.sub(r"\bactivity\b", " ", stem)
+    stem = re.sub(r"\bresults\b", " ", stem)
+    stem = re.sub(r"\boutput\b", " ", stem)
+
+    stem = re.sub(r"[_\-\s]+", "_", stem)
+    stem = stem.strip("_")
+
+    return stem
+
+def _find_duplicate_names(files):
+    counts = {}
+    for f in files:
+        name = os.path.basename(str(f.name)).lower()
+        counts[name] = counts.get(name, 0) + 1
+    return {k: v for k, v in counts.items() if v > 1}
+
+def _find_duplicate_match_keys(files):
+    groups = {}
+    for f in files:
+        key = _normalize_match_key(f.name)
+        groups.setdefault(key, []).append(f.name)
+    return {k: v for k, v in groups.items() if len(v) > 1}
+
+def _summarize_upload_alignment(activity_files, fpr_files):
+    activity_files = activity_files if activity_files else []
+    fpr_files = fpr_files if fpr_files else []
+
+    activity_keys = {}
+    for f in activity_files:
+        activity_keys.setdefault(_normalize_match_key(f.name), []).append(f.name)
+
+    fpr_keys = {}
+    for f in fpr_files:
+        fpr_keys.setdefault(_normalize_match_key(f.name), []).append(f.name)
+
+    shared_keys = sorted(set(activity_keys.keys()) & set(fpr_keys.keys()))
+    missing_fpr = {k: activity_keys[k] for k in activity_keys if k not in fpr_keys}
+    missing_activity = {k: fpr_keys[k] for k in fpr_keys if k not in activity_keys}
+
+    return {
+        "shared_keys": shared_keys,
+        "missing_fpr": missing_fpr,
+        "missing_activity": missing_activity,
+        "activity_duplicate_names": _find_duplicate_names(activity_files),
+        "fpr_duplicate_names": _find_duplicate_names(fpr_files),
+        "activity_duplicate_keys": _find_duplicate_match_keys(activity_files),
+        "fpr_duplicate_keys": _find_duplicate_match_keys(fpr_files),
+    }
+
+def _deduplicate_uploaded_files(files, label):
+    if not files:
+        return []
+
+    seen_names = set()
+    deduped = []
+    skipped = []
+
+    for f in files:
+        name = os.path.basename(str(f.name)).lower()
+        if name in seen_names:
+            skipped.append(f.name)
+            continue
+        seen_names.add(name)
+        deduped.append(f)
+
+    if len(skipped) > 0:
+        st.warning(
+            f"{label}: exact duplicate uploads were skipped: "
+            + ", ".join(skipped[:10])
+            + (" ..." if len(skipped) > 10 else "")
+        )
+
+    return deduped
+
 def _merge_uploaded_wide_files(file_list, label):
     if file_list is None or len(file_list) == 0:
         return None
@@ -267,6 +348,8 @@ def _prepare_uploaded_input(file_input, label, expected_kind=None):
     if len(files) == 0:
         return None
 
+    files = _deduplicate_uploaded_files(files, label)
+
     return _merge_uploaded_wide_files(files, label)
 
 # Sidebar
@@ -334,6 +417,51 @@ with colB:
         label_visibility="collapsed",
         accept_multiple_files=True,
     )
+
+if file_activity or file_fpr:
+    upload_summary = _summarize_upload_alignment(file_activity, file_fpr)
+
+    if len(upload_summary["activity_duplicate_names"]) > 0:
+        st.warning("Duplicate activity filenames detected.")
+        for name, count in upload_summary["activity_duplicate_names"].items():
+            st.write(f"- {name} uploaded {count} times")
+
+    if len(upload_summary["fpr_duplicate_names"]) > 0:
+        st.warning("Duplicate FPR filenames detected.")
+        for name, count in upload_summary["fpr_duplicate_names"].items():
+            st.write(f"- {name} uploaded {count} times")
+
+    activity_dup_keys = {
+        k: v for k, v in upload_summary["activity_duplicate_keys"].items()
+        if len(set([os.path.basename(str(x)).lower() for x in v])) > 1
+    }
+    if len(activity_dup_keys) > 0:
+        st.warning("Multiple activity files appear to represent the same result set.")
+        for key, names in activity_dup_keys.items():
+            st.write(f"- Match key `{key}`:")
+            st.write(names)
+
+    fpr_dup_keys = {
+        k: v for k, v in upload_summary["fpr_duplicate_keys"].items()
+        if len(set([os.path.basename(str(x)).lower() for x in v])) > 1
+    }
+    if len(fpr_dup_keys) > 0:
+        st.warning("Multiple FPR files appear to represent the same result set.")
+        for key, names in fpr_dup_keys.items():
+            st.write(f"- Match key `{key}`:")
+            st.write(names)
+
+    if len(upload_summary["missing_fpr"]) > 0:
+        st.warning("Some activity files are missing a matching FPR file.")
+        for key, names in upload_summary["missing_fpr"].items():
+            st.write(f"- Missing FPR match for activity key `{key}`:")
+            st.write(names)
+
+    if len(upload_summary["missing_activity"]) > 0:
+        st.warning("Some FPR files are missing a matching activity file.")
+        for key, names in upload_summary["missing_activity"].items():
+            st.write(f"- Missing activity match for FPR key `{key}`:")
+            st.write(names)
 
 if not file_activity:
     st.info(
