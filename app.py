@@ -11,6 +11,7 @@ from io import BytesIO
 from PIL import Image
 import os
 import re
+import hashlib
 
 TUTORIAL_URL = "https://naeglelab.github.io/KSTAR/Tutorial/tutorial.html"
 KSTAR_URL = "https://naeglelab-test-proteome-scout-3.pods.uvarc.io/kstar/"
@@ -190,6 +191,16 @@ def _read_uploaded_tsv(uploaded_file):
     uploaded_file.seek(0)
     return pd.read_csv(uploaded_file, sep="\t")
 
+def _get_uploaded_file_bytes(uploaded_file):
+    uploaded_file.seek(0)
+    data = uploaded_file.read()
+    uploaded_file.seek(0)
+    return data
+
+def _get_uploaded_file_hash(uploaded_file):
+    data = _get_uploaded_file_bytes(uploaded_file)
+    return hashlib.sha256(data).hexdigest()
+
 def _normalize_match_key(filename):
     name = os.path.basename(str(filename)).lower()
     stem = os.path.splitext(name)[0]
@@ -206,12 +217,19 @@ def _normalize_match_key(filename):
 
     return stem
 
-def _find_duplicate_names(files):
-    counts = {}
+def _find_same_name_files(files):
+    groups = {}
     for f in files:
         name = os.path.basename(str(f.name)).lower()
-        counts[name] = counts.get(name, 0) + 1
-    return {k: v for k, v in counts.items() if v > 1}
+        groups.setdefault(name, []).append(f.name)
+    return {k: v for k, v in groups.items() if len(v) > 1}
+
+def _find_duplicate_content(files):
+    groups = {}
+    for f in files:
+        file_hash = _get_uploaded_file_hash(f)
+        groups.setdefault(file_hash, []).append(f.name)
+    return {k: v for k, v in groups.items() if len(v) > 1}
 
 def _find_duplicate_match_keys(files):
     groups = {}
@@ -240,8 +258,10 @@ def _summarize_upload_alignment(activity_files, fpr_files):
         "shared_keys": shared_keys,
         "missing_fpr": missing_fpr,
         "missing_activity": missing_activity,
-        "activity_duplicate_names": _find_duplicate_names(activity_files),
-        "fpr_duplicate_names": _find_duplicate_names(fpr_files),
+        "activity_same_names": _find_same_name_files(activity_files),
+        "fpr_same_names": _find_same_name_files(fpr_files),
+        "activity_duplicate_content": _find_duplicate_content(activity_files),
+        "fpr_duplicate_content": _find_duplicate_content(fpr_files),
         "activity_duplicate_keys": _find_duplicate_match_keys(activity_files),
         "fpr_duplicate_keys": _find_duplicate_match_keys(fpr_files),
     }
@@ -250,21 +270,21 @@ def _deduplicate_uploaded_files(files, label):
     if not files:
         return []
 
-    seen_names = set()
+    seen_hashes = set()
     deduped = []
     skipped = []
 
     for f in files:
-        name = os.path.basename(str(f.name)).lower()
-        if name in seen_names:
+        file_hash = _get_uploaded_file_hash(f)
+        if file_hash in seen_hashes:
             skipped.append(f.name)
             continue
-        seen_names.add(name)
+        seen_hashes.add(file_hash)
         deduped.append(f)
 
     if len(skipped) > 0:
         st.warning(
-            f"{label}: exact duplicate uploads were skipped: "
+            f"{label}: true duplicate files with identical content were skipped: "
             + ", ".join(skipped[:10])
             + (" ..." if len(skipped) > 10 else "")
         )
@@ -421,32 +441,44 @@ with colB:
 if file_activity or file_fpr:
     upload_summary = _summarize_upload_alignment(file_activity, file_fpr)
 
-    if len(upload_summary["activity_duplicate_names"]) > 0:
-        st.warning("Duplicate activity filenames detected.")
-        for name, count in upload_summary["activity_duplicate_names"].items():
-            st.write(f"- {name} uploaded {count} times")
+    if len(upload_summary["activity_same_names"]) > 0:
+        st.warning("Some activity uploads have the same filename. These are not treated as duplicates unless their file contents are also identical.")
+        for name, names in upload_summary["activity_same_names"].items():
+            st.write(f"- Filename reused: {name}")
+            st.write(names)
 
-    if len(upload_summary["fpr_duplicate_names"]) > 0:
-        st.warning("Duplicate FPR filenames detected.")
-        for name, count in upload_summary["fpr_duplicate_names"].items():
-            st.write(f"- {name} uploaded {count} times")
+    if len(upload_summary["fpr_same_names"]) > 0:
+        st.warning("Some FPR uploads have the same filename. These are not treated as duplicates unless their file contents are also identical.")
+        for name, names in upload_summary["fpr_same_names"].items():
+            st.write(f"- Filename reused: {name}")
+            st.write(names)
+
+    if len(upload_summary["activity_duplicate_content"]) > 0:
+        st.warning("True duplicate activity files detected based on identical file contents.")
+        for _, names in upload_summary["activity_duplicate_content"].items():
+            st.write(names)
+
+    if len(upload_summary["fpr_duplicate_content"]) > 0:
+        st.warning("True duplicate FPR files detected based on identical file contents.")
+        for _, names in upload_summary["fpr_duplicate_content"].items():
+            st.write(names)
 
     activity_dup_keys = {
         k: v for k, v in upload_summary["activity_duplicate_keys"].items()
-        if len(set([os.path.basename(str(x)).lower() for x in v])) > 1
+        if len(v) > 1
     }
     if len(activity_dup_keys) > 0:
-        st.warning("Multiple activity files appear to represent the same result set.")
+        st.warning("Multiple activity files appear to map to the same inferred match group.")
         for key, names in activity_dup_keys.items():
             st.write(f"- Match key `{key}`:")
             st.write(names)
 
     fpr_dup_keys = {
         k: v for k, v in upload_summary["fpr_duplicate_keys"].items()
-        if len(set([os.path.basename(str(x)).lower() for x in v])) > 1
+        if len(v) > 1
     }
     if len(fpr_dup_keys) > 0:
-        st.warning("Multiple FPR files appear to represent the same result set.")
+        st.warning("Multiple FPR files appear to map to the same inferred match group.")
         for key, names in fpr_dup_keys.items():
             st.write(f"- Match key `{key}`:")
             st.write(names)
