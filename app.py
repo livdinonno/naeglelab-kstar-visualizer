@@ -205,24 +205,16 @@ def _normalize_match_key(filename):
     name = os.path.basename(str(filename)).lower()
     stem = os.path.splitext(name)[0]
 
-    stem = re.sub(r"false[_\-\s]*positive[_\-\s]*rate", " ", stem)
-    stem = re.sub(r"\bfpr\b", " ", stem)
-    stem = re.sub(r"\bactivities\b", " ", stem)
-    stem = re.sub(r"\bactivity\b", " ", stem)
-    stem = re.sub(r"\bresults\b", " ", stem)
-    stem = re.sub(r"\boutput\b", " ", stem)
+    stem = re.sub(r"false[_\-\s]*positive[_\-\s]*rate", "", stem)
 
-    stem = re.sub(r"[_\-\s]+", "_", stem)
-    stem = stem.strip("_")
+    stem = re.sub(r"[_\-\s]+", "_", stem).strip("_")
+
+    stem = re.sub(r"(?:^|_)(activities|activity|fpr)(?:_\d+)?$", "", stem)
+    stem = re.sub(r"(?:^|_)(activities|activity|fpr)(?:$)", "", stem)
+
+    stem = re.sub(r"_+", "_", stem).strip("_")
 
     return stem
-
-def _find_same_name_files(files):
-    groups = {}
-    for f in files:
-        name = os.path.basename(str(f.name)).lower()
-        groups.setdefault(name, []).append(f.name)
-    return {k: v for k, v in groups.items() if len(v) > 1}
 
 def _find_duplicate_content(files):
     groups = {}
@@ -258,8 +250,6 @@ def _summarize_upload_alignment(activity_files, fpr_files):
         "shared_keys": shared_keys,
         "missing_fpr": missing_fpr,
         "missing_activity": missing_activity,
-        "activity_same_names": _find_same_name_files(activity_files),
-        "fpr_same_names": _find_same_name_files(fpr_files),
         "activity_duplicate_content": _find_duplicate_content(activity_files),
         "fpr_duplicate_content": _find_duplicate_content(fpr_files),
         "activity_duplicate_keys": _find_duplicate_match_keys(activity_files),
@@ -440,18 +430,6 @@ with colB:
 
 if file_activity or file_fpr:
     upload_summary = _summarize_upload_alignment(file_activity, file_fpr)
-
-    if len(upload_summary["activity_same_names"]) > 0:
-        st.warning("Some activity uploads have the same filename. These are not treated as duplicates unless their file contents are also identical.")
-        for name, names in upload_summary["activity_same_names"].items():
-            st.write(f"- Filename reused: {name}")
-            st.write(names)
-
-    if len(upload_summary["fpr_same_names"]) > 0:
-        st.warning("Some FPR uploads have the same filename. These are not treated as duplicates unless their file contents are also identical.")
-        for name, names in upload_summary["fpr_same_names"].items():
-            st.write(f"- Filename reused: {name}")
-            st.write(names)
 
     if len(upload_summary["activity_duplicate_content"]) > 0:
         st.warning("True duplicate activity files detected based on identical file contents.")
