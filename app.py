@@ -380,7 +380,7 @@ with st.sidebar:
     st.caption("Step-by-step tutorial on GitHub.")
     st.markdown(f"- [{TUTORIAL_URL}]({TUTORIAL_URL})")
 
-# Title and intro
+# title/intro
 st.markdown(
     "<h1 style='text-align:center; margin-top:0;'>KSTAR Results Plotter</h1>",
     unsafe_allow_html=True,
@@ -714,7 +714,7 @@ else:
 
     fig_download_controls(fig_dot, "kstar_activity_fpr_dotplot", "dotplot_dl")
 
-# 2) Ranked bar plot
+# 2) Ranked bar plot --> may take this out or at least edit
 st.divider()
 st.subheader("2) Ranked Inferred Kinase Activity Summary")
 st.markdown(
@@ -929,7 +929,7 @@ if len(zero_signal_entries) > 0:
         st.markdown(zero_text)
         st.markdown(", ".join(zero_names))
 
-# 3) Activity Heatmap
+# 3) heatmap
 st.divider()
 st.subheader("3) Activity Heatmap")
 st.markdown(
